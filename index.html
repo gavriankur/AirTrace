@@ -52,6 +52,20 @@
     .timeline-time div:last-child { text-align: right; }
     .timeline-time strong { color: #102c3c; font-size: 15px; }
     .timeline-time .current-time strong { color: #ff6b2c; font-size: 18px; }
+    #mapCanvas .plane-marker {
+      width: 64px;
+      height: 64px;
+      z-index: 10;
+      filter: drop-shadow(0 7px 10px rgba(6, 38, 60, .55));
+    }
+    #mapCanvas .plane-marker svg {
+      width: 46px;
+      height: 46px;
+    }
+    #mapCanvas .plane-marker::before,
+    #mapCanvas .plane-marker::after {
+      inset: 2px;
+    }
     @media (max-width: 650px) {
       .location-strip { align-items: flex-start; flex-direction: column; }
       .location-strip small { text-align: left; }
@@ -340,10 +354,19 @@ function formatDuration(milliseconds) {
   return `${Math.floor(totalMinutes / 60)}h ${String(totalMinutes % 60).padStart(2, "0")}m`;
 }
 
+function flightTimestamp(value) {
+  if (typeof value === "number") return value;
+  const normalized = String(value || "").trim().replace(
+    /^(\d{4}-\d{2}-\d{2})\s+/,
+    "$1T"
+  );
+  return Date.parse(normalized);
+}
+
 function formatClock(iso, timeZone) {
   return new Intl.DateTimeFormat(undefined, {
     hour: "2-digit", minute: "2-digit", timeZone, timeZoneName: "short"
-  }).format(new Date(iso));
+  }).format(new Date(flightTimestamp(iso)));
 }
 
 function interpolateRoute(points, progress) {
@@ -429,19 +452,13 @@ function fitRoute() {
     const latitudes = coordinates.map(coordinate => coordinate[1]);
     const west = Math.min(...longitudes);
     const east = Math.max(...longitudes);
-    const south = Math.min(...latitudes);
-    const north = Math.max(...latitudes);
     const longitudeSpan = Math.max(east - west, .08);
-    const latitudeSpan = Math.max(north - south, .08);
-    const container = map.getContainer();
-    const usableWidth = Math.max(240, container.clientWidth - 150);
-    const usableHeight = Math.max(220, container.clientHeight - 150);
-    const horizontalZoom = Math.log2((usableWidth * 360) / (512 * longitudeSpan));
-    const verticalZoom = Math.log2((usableHeight * 170) / (512 * latitudeSpan));
-    const targetZoom = clamp(Math.min(horizontalZoom, verticalZoom), 2, 9);
+    const progress = previewProgress === null ? currentClockProgress() : previewProgress;
+    const point = interpolateRoute(journey.route.points, progress);
+    const targetZoom = longitudeSpan < 6 ? 7 : longitudeSpan < 20 ? 5.5 : 4;
 
     map.easeTo({
-      center: [(west + east) / 2, (south + north) / 2],
+      center: [point.lon, point.lat],
       zoom: targetZoom,
       duration: 500
     });
@@ -462,7 +479,12 @@ function updateMapRoute() {
     map.addLayer({ id: "journey-line", type: "line", source: "journey", filter: ["==", ["get", "kind"], "route"], paint: { "line-color": "#ff6b2c", "line-width": 3, "line-dasharray": [2, 2] } });
     map.addLayer({ id: "journey-airports", type: "circle", source: "journey", filter: ["==", ["get", "kind"], "airport"], paint: { "circle-radius": 6, "circle-color": "#ff6b2c", "circle-stroke-color": "#ffffff", "circle-stroke-width": 2 } });
   }
-  if (!planeMarker) planeMarker = new maplibregl.Marker({ element: planeElement(), rotationAlignment: "map", pitchAlignment: "map" }).addTo(map);
+  if (!planeMarker) {
+    document.querySelectorAll("#mapCanvas .plane-marker").forEach(element => element.remove());
+    planeMarker = new maplibregl.Marker({ element: planeElement(), rotationAlignment: "map", pitchAlignment: "map" }).addTo(map);
+  }
+  const progress = previewProgress === null ? currentClockProgress() : previewProgress;
+  updatePlaneMarker(progress);
   fitRoute();
 }
 
@@ -489,8 +511,8 @@ function initializeMap() {
 }
 
 function currentClockProgress() {
-  const start = new Date(journey.flight.departureUtc).getTime();
-  const end = new Date(journey.flight.arrivalUtc).getTime();
+  const start = flightTimestamp(journey.flight.departureUtc);
+  const end = flightTimestamp(journey.flight.arrivalUtc);
   return clamp((Date.now() - start) / (end - start));
 }
 
@@ -511,8 +533,8 @@ function formatTimelineClock(milliseconds, timeZone) {
 }
 
 function updateTimelineTimes(progress) {
-  const departure = new Date(journey.flight.departureUtc).getTime();
-  const arrival = new Date(journey.flight.arrivalUtc).getTime();
+  const departure = flightTimestamp(journey.flight.departureUtc);
+  const arrival = flightTimestamp(journey.flight.arrivalUtc);
   const current = departure + (arrival - departure) * progress;
   const currentZone = progress < .5
     ? journey.flight.origin.timeZone
@@ -560,8 +582,8 @@ function renderTracker() {
   const progress = previewProgress === null ? currentClockProgress() : previewProgress;
   const point = interpolateRoute(journey.route.points, progress);
   const now = Date.now();
-  const departure = new Date(journey.flight.departureUtc).getTime();
-  const arrival = new Date(journey.flight.arrivalUtc).getTime();
+  const departure = flightTimestamp(journey.flight.departureUtc);
+  const arrival = flightTimestamp(journey.flight.arrivalUtc);
 
   updatePlaneMarker(progress);
   $("progressText").textContent = `${Math.round(progress * 100)}%`;
@@ -710,15 +732,27 @@ function loadDemo() {
 
 $("prepareForm").addEventListener("submit", prepareFlight);
 $("demoButton").addEventListener("click", loadDemo);
-$("previewSlider").addEventListener("input", event => { previewProgress = Number(event.target.value) / 100; renderTracker(); });
-$("clockButton").addEventListener("click", () => { previewProgress = null; renderTracker(); });
+$("previewSlider").addEventListener("input", event => {
+  previewProgress = Number(event.target.value) / 100;
+  renderTracker();
+  fitRoute();
+});
+$("clockButton").addEventListener("click", () => {
+  previewProgress = null;
+  renderTracker();
+  fitRoute();
+});
 $("changeFlight").addEventListener("click", showFreshJourney);
 window.addEventListener("online", setNetworkState);
 window.addEventListener("offline", setNetworkState);
 
 setDefaultDate();
 setNetworkState();
-if ("serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js").catch(() => {});
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("./sw.js?v=12").then(registration => {
+    registration.update().catch(() => {});
+  }).catch(() => {});
+}
 
 try {
   const savedJourney = JSON.parse(localStorage.getItem(STORAGE_KEY));
