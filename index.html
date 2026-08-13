@@ -445,7 +445,7 @@ function fitRoute() {
   const coordinates = unwrapRoute(journey.route.points);
   if (!coordinates.length) return;
 
-  const refit = () => {
+  requestAnimationFrame(() => {
     map.resize();
 
     const longitudes = coordinates.map(coordinate => coordinate[0]);
@@ -457,16 +457,14 @@ function fitRoute() {
     const point = interpolateRoute(journey.route.points, progress);
     const targetZoom = longitudeSpan < 6 ? 7 : longitudeSpan < 20 ? 5.5 : 4;
 
-    map.easeTo({
+    map.jumpTo({
       center: [point.lon, point.lat],
       zoom: targetZoom,
-      duration: 500
+      bearing: 0,
+      pitch: 0
     });
-  };
-
-  requestAnimationFrame(refit);
-  setTimeout(refit, 300);
-  setTimeout(refit, 1000);
+    updatePlaneMarker(progress);
+  });
 }
 
 function updateMapRoute() {
@@ -548,34 +546,15 @@ function updateTimelineTimes(progress) {
 function fallbackFlyingOver(progress) {
   const origin = journey.flight.origin.city || journey.flight.origin.code;
   const destination = journey.flight.destination.city || journey.flight.destination.code;
-  if (progress <= .06) return `Near ${origin}`;
-  if (progress >= .94) return `Approaching ${destination}`;
-  return `Between ${origin} and ${destination}`;
+  if (progress <= .08) return `Near ${origin}`;
+  if (progress >= .82) return `Approaching ${destination}`;
+  return `En route to ${destination}`;
 }
 
 function updateFlyingOver(point, progress) {
   const field = $("flyingOver");
   field.textContent = fallbackFlyingOver(progress);
-  $("flyingOverDetail").textContent = "Estimated from the simulated route";
-
-  if (!mapReady || !map) return;
-  requestAnimationFrame(() => {
-    try {
-      const pixel = map.project([point.lon, point.lat]);
-      const features = map.queryRenderedFeatures([
-        [pixel.x - 70, pixel.y - 45],
-        [pixel.x + 70, pixel.y + 45]
-      ]);
-      const named = features.find(feature => {
-        const name = feature.properties?.name_en || feature.properties?.name;
-        return name && typeof name === "string" && name.length < 45;
-      });
-      const name = named?.properties?.name_en || named?.properties?.name;
-      if (name) field.textContent = `Near ${name}`;
-    } catch (_) {
-      // The route-based fallback remains available offline.
-    }
-  });
+  $("flyingOverDetail").textContent = "Route estimate — not live GPS";
 }
 
 function renderTracker() {
@@ -749,7 +728,7 @@ window.addEventListener("offline", setNetworkState);
 setDefaultDate();
 setNetworkState();
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("./sw.js?v=12").then(registration => {
+  navigator.serviceWorker.register("./sw.js?v=13").then(registration => {
     registration.update().catch(() => {});
   }).catch(() => {});
 }
