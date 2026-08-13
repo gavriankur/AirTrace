@@ -1,0 +1,8 @@
+name = "airtrace-api"
+main = "worker.js"
+compatibility_date = "2026-08-01"
+
+[vars]
+# Replace this with your exact GitHub Pages origin after publishing.
+# Multiple origins can be comma-separated. Use "*" only for initial testing.
+ALLOWED_ORIGINS = "*"
