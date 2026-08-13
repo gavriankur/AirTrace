@@ -53,14 +53,7 @@
     .timeline-time strong { color: #102c3c; font-size: 15px; }
     .timeline-time .current-time strong { color: #ff6b2c; font-size: 18px; }
     #mapCanvas .plane-marker {
-      position: absolute !important;
-      top: 0 !important;
-      left: 0 !important;
-      width: 64px;
-      height: 64px;
-      z-index: 10;
-      pointer-events: none;
-      filter: drop-shadow(0 7px 10px rgba(6, 38, 60, .55));
+      display: none !important;
     }
     #mapCanvas .plane-marker svg {
       width: 46px;
@@ -411,26 +404,66 @@ function unwrapRoute(points) {
   return coordinates;
 }
 
-function routeGeoJson() {
+function routeGeoJson(progressOverride = null) {
   const coordinates = unwrapRoute(journey.route.points);
   const start = coordinates[0];
   const end = coordinates.at(-1);
+  const progress = progressOverride === null
+    ? (previewProgress === null ? currentClockProgress() : previewProgress)
+    : progressOverride;
+  const plane = interpolateRoute(journey.route.points, progress);
+  const ahead = interpolateRoute(journey.route.points, Math.min(1, progress + .002));
   return {
     type: "FeatureCollection",
     features: [
       { type: "Feature", properties: { kind: "route" }, geometry: { type: "LineString", coordinates } },
       { type: "Feature", properties: { kind: "airport" }, geometry: { type: "Point", coordinates: start } },
-      { type: "Feature", properties: { kind: "airport" }, geometry: { type: "Point", coordinates: end } }
+      { type: "Feature", properties: { kind: "airport" }, geometry: { type: "Point", coordinates: end } },
+      {
+        type: "Feature",
+        properties: { kind: "plane", bearing: bearingBetween(plane, ahead) },
+        geometry: { type: "Point", coordinates: [plane.lon, plane.lat] }
+      }
     ]
   };
 }
 
-function planeElement() {
-  const element = document.createElement("div");
-  element.className = "plane-marker";
-  element.setAttribute("aria-label", "Estimated aircraft position");
-  element.innerHTML = `<svg viewBox="0 0 40 40" aria-hidden="true"><circle class="plane-disc" cx="20" cy="20" r="16"/><path class="plane-shape" d="M18.5 21.2 9 17.3l1.4-2.1 9.6 1.8 5.1-8.3 3 1-2.8 8.8 5.8 4.3-1.8 2.3-6.2-2.3-3.4 8.3-2.8-.8.5-8.8Z"/></svg>`;
-  return element;
+function planeMapImage() {
+  const size = 96;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const context = canvas.getContext("2d");
+  context.clearRect(0, 0, size, size);
+  context.beginPath();
+  context.arc(48, 48, 38, 0, Math.PI * 2);
+  context.fillStyle = "#ff6b2c";
+  context.fill();
+  context.lineWidth = 5;
+  context.strokeStyle = "#ffffff";
+  context.stroke();
+  context.beginPath();
+  context.moveTo(48, 18);
+  context.lineTo(55, 43);
+  context.lineTo(76, 53);
+  context.lineTo(73, 61);
+  context.lineTo(55, 56);
+  context.lineTo(55, 74);
+  context.lineTo(64, 82);
+  context.lineTo(60, 87);
+  context.lineTo(48, 80);
+  context.lineTo(36, 87);
+  context.lineTo(32, 82);
+  context.lineTo(41, 74);
+  context.lineTo(41, 56);
+  context.lineTo(23, 61);
+  context.lineTo(20, 53);
+  context.lineTo(41, 43);
+  context.closePath();
+  context.fillStyle = "#ffffff";
+  context.fill();
+  const pixels = context.getImageData(0, 0, size, size);
+  return { width: size, height: size, data: pixels.data };
 }
 
 function bearingBetween(a, b) {
@@ -476,14 +509,25 @@ function updateMapRoute() {
   const data = routeGeoJson();
   if (map.getSource("journey")) map.getSource("journey").setData(data);
   else {
+    if (!map.hasImage("airtrace-plane")) map.addImage("airtrace-plane", planeMapImage(), { pixelRatio: 2 });
     map.addSource("journey", { type: "geojson", data });
     map.addLayer({ id: "journey-line-shadow", type: "line", source: "journey", filter: ["==", ["get", "kind"], "route"], paint: { "line-color": "#ffffff", "line-width": 6, "line-opacity": .82 } });
     map.addLayer({ id: "journey-line", type: "line", source: "journey", filter: ["==", ["get", "kind"], "route"], paint: { "line-color": "#ff6b2c", "line-width": 3, "line-dasharray": [2, 2] } });
     map.addLayer({ id: "journey-airports", type: "circle", source: "journey", filter: ["==", ["get", "kind"], "airport"], paint: { "circle-radius": 6, "circle-color": "#ff6b2c", "circle-stroke-color": "#ffffff", "circle-stroke-width": 2 } });
-  }
-  if (!planeMarker) {
-    document.querySelectorAll("#mapCanvas .plane-marker").forEach(element => element.remove());
-    planeMarker = new maplibregl.Marker({ element: planeElement(), rotationAlignment: "map", pitchAlignment: "map" }).addTo(map);
+    map.addLayer({
+      id: "journey-plane",
+      type: "symbol",
+      source: "journey",
+      filter: ["==", ["get", "kind"], "plane"],
+      layout: {
+        "icon-image": "airtrace-plane",
+        "icon-size": .72,
+        "icon-allow-overlap": true,
+        "icon-ignore-placement": true,
+        "icon-rotation-alignment": "map",
+        "icon-rotate": ["get", "bearing"]
+      }
+    });
   }
   const progress = previewProgress === null ? currentClockProgress() : previewProgress;
   updatePlaneMarker(progress);
@@ -519,11 +563,8 @@ function currentClockProgress() {
 }
 
 function updatePlaneMarker(progress) {
-  if (!planeMarker || !journey) return;
-  const point = interpolateRoute(journey.route.points, progress);
-  const ahead = interpolateRoute(journey.route.points, Math.min(1, progress + .002));
-  planeMarker.setLngLat([point.lon, point.lat]);
-  planeMarker.setRotation(bearingBetween(point, ahead));
+  if (!mapReady || !journey || !map.getSource("journey")) return;
+  map.getSource("journey").setData(routeGeoJson(progress));
 }
 
 function formatTimelineClock(milliseconds, timeZone) {
@@ -617,11 +658,7 @@ function openJourney(data) {
   clearInterval(clockTimer);
   clockTimer = setInterval(() => { if (previewProgress === null) renderTracker(); }, 1000);
   cancelAnimationFrame(animationFrame);
-  const animate = () => {
-    if (journey && previewProgress === null) updatePlaneMarker(currentClockProgress());
-    animationFrame = requestAnimationFrame(animate);
-  };
-  animationFrame = requestAnimationFrame(animate);
+  animationFrame = null;
 }
 
 async function prepareFlight(event) {
@@ -732,7 +769,7 @@ window.addEventListener("offline", setNetworkState);
 setDefaultDate();
 setNetworkState();
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("./sw.js?v=14").then(registration => {
+  navigator.serviceWorker.register("./sw.js?v=15").then(registration => {
     registration.update().catch(() => {});
   }).catch(() => {});
 }
