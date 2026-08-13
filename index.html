@@ -4,79 +4,299 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#102c3c">
-  <meta name="description" content="Prepare a flight online, then follow an estimated historical route offline.">
+  <meta
+    name="description"
+    content="Prepare a flight online, then follow its estimated route offline."
+  >
+
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./vendor/maplibre-gl.css?v=5.19.0">
+  <link
+    rel="stylesheet"
+    href="./vendor/maplibre-gl.css?v=5.19.0"
+  >
   <link rel="stylesheet" href="./styles.css?v=4">
+
   <title>Airtrace — Offline Flight Tracker</title>
 </head>
+
 <body>
   <header class="topbar">
-    <a class="brand" href="./" aria-label="Airtrace home"><span>✦</span>Airtrace</a>
-    <div class="network" id="network"><i></i><b>Checking connection</b></div>
+    <a class="brand" href="./" aria-label="Airtrace home">
+      <span>✦</span>
+      Airtrace
+    </a>
+
+    <div class="network" id="network">
+      <i></i>
+      <b>Checking connection</b>
+    </div>
   </header>
 
   <main>
     <section class="setup" id="setupView">
       <div class="intro">
         <p class="kicker">YOUR OFFLINE WINDOW SEAT</p>
-        <h1>Prepare online.<br><em>Explore in the air.</em></h1>
-        <p class="lede">Airtrace finds your flight, builds a clock-driven route estimate, and saves the journey on this device before takeoff.</p>
+
+        <h1>
+          Prepare online.<br>
+          <em>Explore in the air.</em>
+        </h1>
+
+        <p class="lede">
+          Airtrace finds your flight, builds a clock-driven route estimate,
+          and saves the journey on this device before takeoff.
+        </p>
       </div>
 
       <form class="prepare-card" id="prepareForm">
         <div class="fields">
-          <label>Flight number<input id="flightNumber" value="AI175" autocomplete="off" required></label>
-          <label>Departure date<input id="flightDate" type="date" required></label>
+          <label>
+            Flight number
+            <input
+              id="flightNumber"
+              value="AI175"
+              autocomplete="off"
+              required
+            >
+          </label>
+
+          <label>
+            Departure date
+            <input
+              id="flightDate"
+              type="date"
+              required
+            >
+          </label>
         </div>
-        <button class="primary" id="prepareButton">Prepare this flight <span>→</span></button>
-        <button class="secondary" id="demoButton" type="button">Explore with demonstration data</button>
+
+        <button class="primary" id="prepareButton">
+          Prepare this flight
+          <span>→</span>
+        </button>
+
+        <button class="secondary" id="demoButton" type="button">
+          Explore with demonstration data
+        </button>
+
         <div class="message" id="message" role="status"></div>
       </form>
 
       <div class="steps">
-        <article><b>01</b><div><strong>Find the flight</strong><span>Schedule and airport details are retrieved online.</span></div></article>
-        <article><b>02</b><div><strong>Build its estimated path</strong><span>The route uses airport coordinates and any usable provider data.</span></div></article>
-        <article><b>03</b><div><strong>Save it offline</strong><span>The prepared journey stays on this device.</span></div></article>
+        <article>
+          <b>01</b>
+          <div>
+            <strong>Find the flight</strong>
+            <span>
+              Schedule and airport details are retrieved online.
+            </span>
+          </div>
+        </article>
+
+        <article>
+          <b>02</b>
+          <div>
+            <strong>Build its estimated path</strong>
+            <span>
+              The route uses airport coordinates and any usable provider data.
+            </span>
+          </div>
+        </article>
+
+        <article>
+          <b>03</b>
+          <div>
+            <strong>Save it offline</strong>
+            <span>
+              The prepared journey stays on this device.
+            </span>
+          </div>
+        </article>
       </div>
     </section>
 
     <section class="tracker hidden" id="trackerView">
       <div class="flight-heading">
-        <div><p class="kicker" id="flightIdentity"></p><h1><span id="originCity"></span><i>→</i><span id="destinationCity"></span></h1></div>
-        <div class="remaining"><span id="phaseLabel">TIME REMAINING</span><strong id="remainingTime">—</strong><small id="arrivalTime"></small></div>
+        <div>
+          <p class="kicker" id="flightIdentity"></p>
+
+          <h1>
+            <span id="originCity"></span>
+            <i>→</i>
+            <span id="destinationCity"></span>
+          </h1>
+        </div>
+
+        <div class="remaining">
+          <span id="phaseLabel">TIME REMAINING</span>
+          <strong id="remainingTime">—</strong>
+          <small id="arrivalTime"></small>
+        </div>
       </div>
 
       <div class="route-meta">
-        <span id="routeSource"></span><span id="savedStatus">Saved for offline use</span>
-        <button id="changeFlight">Prepare another flight</button>
+        <span id="routeSource"></span>
+        <span id="savedStatus">Saved for offline use</span>
+
+        <button id="changeFlight" type="button">
+          ⌂ Track a fresh journey
+        </button>
       </div>
 
-      <div class="map" aria-label="Estimated flight position on an interactive world map">
+      <div
+        class="map"
+        aria-label="Estimated flight position on an interactive world map"
+      >
         <div id="mapCanvas"></div>
-        <div class="map-loading" id="mapLoading">Loading detailed map…</div>
-        <div class="estimate-pill">● &nbsp; ESTIMATED POSITION</div>
-        <div class="offline-map-note" id="offlineMapNote">Map detail is cached from the online view</div>
+
+        <div class="map-loading" id="mapLoading">
+          Loading detailed map…
+        </div>
+
+        <div class="estimate-pill">
+          ● &nbsp; ESTIMATED POSITION
+        </div>
+
+        <div class="offline-map-note" id="offlineMapNote">
+          Map detail is cached from the online view
+        </div>
       </div>
 
       <div class="metrics">
-        <article><span>JOURNEY</span><strong id="progressText">—</strong><div class="bar"><i id="progressBar"></i></div><small id="phaseDetail"></small></article>
-        <article><span>ESTIMATED COORDINATES</span><strong id="latitude">—</strong><small id="longitude"></small></article>
-        <article><span>ESTIMATED ALTITUDE</span><strong id="altitude">—</strong><small>Derived from the usual route profile</small></article>
-        <article><span>ROUTE CONFIDENCE</span><strong id="confidence">—</strong><small id="sampleDetail"></small></article>
+        <article>
+          <span>JOURNEY</span>
+          <strong id="progressText">—</strong>
+
+          <div class="bar">
+            <i id="progressBar"></i>
+          </div>
+
+          <small id="phaseDetail"></small>
+        </article>
+
+        <article>
+          <span>ESTIMATED COORDINATES</span>
+          <strong id="latitude">—</strong>
+          <small id="longitude"></small>
+        </article>
+
+        <article>
+          <span>ESTIMATED ALTITUDE</span>
+          <strong id="altitude">—</strong>
+          <small>Derived from the usual route profile</small>
+        </article>
+
+        <article>
+          <span>ROUTE CONFIDENCE</span>
+          <strong id="confidence">—</strong>
+          <small id="sampleDetail"></small>
+        </article>
       </div>
 
       <div class="timeline">
-        <div class="timeline-labels"><b id="originCode"></b><span>Preview journey</span><b id="destinationCode"></b></div>
-        <input id="previewSlider" type="range" min="0" max="100" value="0" aria-label="Preview flight progress">
-        <div class="timeline-actions"><button id="clockButton">Return to device clock</button></div>
+        <div class="timeline-labels">
+          <b id="originCode"></b>
+          <span>Preview journey</span>
+          <b id="destinationCode"></b>
+        </div>
+
+        <input
+          id="previewSlider"
+          type="range"
+          min="0"
+          max="100"
+          value="0"
+          aria-label="Preview flight progress"
+        >
+
+        <div class="timeline-actions">
+          <button id="clockButton" type="button">
+            Return to device clock
+          </button>
+        </div>
       </div>
-      <p class="disclaimer">This is a clock-driven estimate based on previously flown routes. It is not live aircraft tracking and will not reflect diversions, holds, weather avoidance or air-traffic-control changes.</p>
+
+      <p class="disclaimer">
+        This is a clock-driven estimate based on the prepared route.
+        It is not live aircraft tracking and will not reflect diversions,
+        holding patterns, weather avoidance, or air-traffic-control changes.
+      </p>
     </section>
   </main>
 
   <script src="./vendor/maplibre-gl.js?v=5.19.0"></script>
   <script src="./config.js?v=4"></script>
   <script src="./app.js?v=4"></script>
+
+  <script>
+    /*
+     * Refit the map after the tracker becomes visible.
+     * This prevents short journeys such as Tokyo–Osaka
+     * from being displayed at world-map scale.
+     */
+    (function () {
+      function fitPreparedRoute() {
+        if (
+          !map ||
+          !mapReady ||
+          !journey ||
+          !journey.route ||
+          !journey.route.points ||
+          !journey.route.points.length
+        ) {
+          return;
+        }
+
+        const coordinates = unwrapRoute(journey.route.points);
+        const bounds = new maplibregl.LngLatBounds();
+
+        coordinates.forEach(function (coordinate) {
+          bounds.extend(coordinate);
+        });
+
+        map.resize();
+
+        map.fitBounds(bounds, {
+          padding: {
+            top: 70,
+            right: 70,
+            bottom: 70,
+            left: 70
+          },
+          maxZoom: 8,
+          duration: 600
+        });
+      }
+
+      const existingUpdateMapRoute = updateMapRoute;
+
+      updateMapRoute = function () {
+        existingUpdateMapRoute();
+
+        requestAnimationFrame(function () {
+          requestAnimationFrame(fitPreparedRoute);
+        });
+      };
+
+      if (map) {
+        if (mapReady) {
+          fitPreparedRoute();
+        } else {
+          map.on("load", fitPreparedRoute);
+        }
+      }
+
+      /*
+       * Refit once after selecting a different saved or prepared journey.
+       */
+      document
+        .getElementById("previewSlider")
+        .addEventListener("pointerdown", function () {
+          if (map) {
+            map.resize();
+          }
+        });
+    })();
+  </script>
 </body>
 </html>
