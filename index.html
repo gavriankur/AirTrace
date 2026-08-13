@@ -21,6 +21,16 @@
   <link rel="stylesheet" href="./styles.css?v=4">
 
   <style>
+    html {
+      width: 100%;
+      overflow-x: hidden;
+      -webkit-text-size-adjust: 100%;
+    }
+    body {
+      width: 100%;
+      min-width: 0;
+      overflow-x: hidden;
+    }
     .location-strip {
       margin-top: 18px;
       padding: 18px 22px;
@@ -64,8 +74,74 @@
       inset: 2px;
     }
     @media (max-width: 650px) {
+      .topbar,
+      main,
+      .setup,
+      .tracker,
+      .prepare-card,
+      .fields,
+      .fields label,
+      .route-meta,
+      .map,
+      .metrics,
+      .location-strip,
+      .timeline {
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+      }
+      .topbar,
+      main {
+        padding-left: 14px;
+        padding-right: 14px;
+      }
+      .setup { padding-top: 38px; }
+      .intro h1 {
+        max-width: 100%;
+        font-size: clamp(40px, 12vw, 48px);
+        overflow-wrap: anywhere;
+      }
+      .lede { font-size: 15px; }
+      .prepare-card { padding: 15px; }
+      .fields input,
+      #flightNumber,
+      #flightDate {
+        display: block;
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+        font-size: 16px !important;
+        line-height: 1.25;
+      }
+      .primary,
+      .secondary {
+        min-height: 50px;
+        white-space: normal;
+        font-size: 16px;
+      }
+      .flight-heading h1 {
+        max-width: 100%;
+        overflow-wrap: anywhere;
+      }
+      .route-meta span { max-width: 100%; }
+      .map {
+        height: 42svh;
+        min-height: 280px;
+        max-height: 420px;
+      }
+      .map-loading {
+        padding: 20px;
+        text-align: center;
+        white-space: normal;
+      }
+      .estimate-pill {
+        max-width: calc(100% - 88px);
+        white-space: nowrap;
+      }
       .location-strip { align-items: flex-start; flex-direction: column; }
       .location-strip small { text-align: left; }
+      .timeline { padding: 14px; }
+      #previewSlider { min-height: 32px; }
     }
   </style>
 
@@ -769,7 +845,7 @@ window.addEventListener("offline", setNetworkState);
 setDefaultDate();
 setNetworkState();
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("./sw.js?v=15").then(registration => {
+  navigator.serviceWorker.register("./sw.js?v=16").then(registration => {
     registration.update().catch(() => {});
   }).catch(() => {});
 }
