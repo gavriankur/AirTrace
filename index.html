@@ -53,9 +53,13 @@
     .timeline-time strong { color: #102c3c; font-size: 15px; }
     .timeline-time .current-time strong { color: #ff6b2c; font-size: 18px; }
     #mapCanvas .plane-marker {
+      position: absolute !important;
+      top: 0 !important;
+      left: 0 !important;
       width: 64px;
       height: 64px;
       z-index: 10;
+      pointer-events: none;
       filter: drop-shadow(0 7px 10px rgba(6, 38, 60, .55));
     }
     #mapCanvas .plane-marker svg {
@@ -728,7 +732,7 @@ window.addEventListener("offline", setNetworkState);
 setDefaultDate();
 setNetworkState();
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("./sw.js?v=13").then(registration => {
+  navigator.serviceWorker.register("./sw.js?v=14").then(registration => {
     registration.update().catch(() => {});
   }).catch(() => {});
 }
