@@ -80,9 +80,10 @@ async function prepareJourney(ident, date, apiKey) {
   if (!departureUtc || !arrivalUtc || Date.parse(arrivalUtc) <= Date.parse(departureUtc)) throw new HttpError(502, "The provider returned incomplete departure or arrival times.");
 
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     preparedAt: new Date().toISOString(),
     provider: "AeroDataBox",
+    lookup: { flight: ident, date },
     flight: {
       ident: target.number || ident,
       airline: target.airline?.name || null,
@@ -90,6 +91,14 @@ async function prepareJourney(ident, date, apiKey) {
       aircraftType: target.aircraft?.model || null,
       departureUtc,
       arrivalUtc,
+      scheduledDepartureUtc: target.departure?.scheduledTime?.utc || null,
+      scheduledArrivalUtc: target.arrival?.scheduledTime?.utc || null,
+      departureRunwayUtc: target.departure?.runwayTime?.utc || null,
+      arrivalRunwayUtc: target.arrival?.runwayTime?.utc || null,
+      arrivalGate: target.arrival?.gate || null,
+      arrivalTerminal: target.arrival?.terminal || null,
+      baggageBelt: target.arrival?.baggageBelt || null,
+      providerLastUpdatedUtc: target.lastUpdatedUtc || null,
       origin,
       destination
     },
