@@ -64,7 +64,9 @@
       gap: 16px;
     }
     .sensor-copy span,
-    .baggage-strip span {
+    .baggage-strip span,
+    .milestone-heading span,
+    .milestone-card span {
       display: block;
       color: #71838d;
       font-size: 11px;
@@ -103,6 +105,65 @@
       justify-content: space-between;
       gap: 16px;
     }
+    .milestone-panel {
+      margin-top: 18px;
+      padding: 18px 22px;
+      border: 1px solid rgba(16, 44, 60, .16);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, .88);
+    }
+    .milestone-heading {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 14px;
+    }
+    .milestone-heading strong { color: #102c3c; font-size: 19px; }
+    .milestone-heading small { color: #71838d; text-align: right; }
+    .milestone-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .milestone-card {
+      min-width: 0;
+      padding: 13px;
+      border: 1px solid rgba(16, 44, 60, .13);
+      border-radius: 12px;
+      background: #fff;
+    }
+    .milestone-card strong {
+      display: block;
+      margin-top: 4px;
+      color: #102c3c;
+      font-size: 18px;
+    }
+    .milestone-card small {
+      display: block;
+      min-height: 32px;
+      margin: 3px 0 10px;
+      color: #71838d;
+      line-height: 1.35;
+    }
+    .milestone-card button {
+      width: 100%;
+      min-height: 38px;
+      padding: 8px 10px;
+      border: 1px solid rgba(16, 44, 60, .18);
+      border-radius: 999px;
+      background: #fff;
+      color: #102c3c;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .milestone-card.confirmed {
+      border-color: rgba(255, 107, 44, .42);
+      background: rgba(255, 107, 44, .055);
+    }
+    .milestone-card.confirmed button { background: #102c3c; color: #fff; }
     .timeline-time {
       margin-bottom: 8px;
       display: grid;
@@ -137,6 +198,7 @@
       .metrics,
       .location-strip,
       .sensor-panel,
+      .milestone-panel,
       .baggage-strip,
       .timeline {
         width: 100%;
@@ -196,6 +258,10 @@
       .sensor-panel { grid-template-columns: 1fr; padding: 15px; }
       .sensor-actions { justify-content: flex-start; }
       .sensor-actions button { flex: 1 1 145px; }
+      .milestone-panel { padding: 15px; }
+      .milestone-heading { align-items: flex-start; flex-direction: column; }
+      .milestone-heading small { text-align: left; }
+      .milestone-grid { grid-template-columns: 1fr 1fr; }
       .baggage-strip { align-items: flex-start; flex-direction: column; padding: 15px; }
       .timeline { padding: 14px; }
       #previewSlider { min-height: 32px; }
@@ -348,8 +414,46 @@
 
         <div class="sensor-actions">
           <button class="sensor-primary" id="sensorButton" type="button">Use phone location</button>
-          <button id="takeoffButton" type="button">We just took off</button>
-          <button id="landedButton" type="button">We have landed</button>
+        </div>
+      </div>
+
+      <div class="milestone-panel">
+        <div class="milestone-heading">
+          <div>
+            <span>BLOCK & FLIGHT MILESTONES</span>
+            <strong>Gate to gate</strong>
+          </div>
+          <small>Provider times are used when available. Tap a milestone to correct it offline.</small>
+        </div>
+
+        <div class="milestone-grid">
+          <article class="milestone-card" id="doorClosedCard">
+            <span>01 · GATE OUT</span>
+            <strong id="doorClosedTime">—</strong>
+            <small id="doorClosedDetail">Scheduled or revised gate departure</small>
+            <button id="doorClosedButton" type="button">Doors closed now</button>
+          </article>
+
+          <article class="milestone-card" id="takeoffCard">
+            <span>02 · WHEELS UP</span>
+            <strong id="takeoffTime">—</strong>
+            <small id="takeoffDetail">Takeoff or runway departure</small>
+            <button id="takeoffButton" type="button">We just took off</button>
+          </article>
+
+          <article class="milestone-card" id="landedCard">
+            <span>03 · WHEELS DOWN</span>
+            <strong id="landedTime">—</strong>
+            <small id="landedDetail">Landing or runway arrival</small>
+            <button id="landedButton" type="button">We have landed</button>
+          </article>
+
+          <article class="milestone-card" id="doorOpenedCard">
+            <span>04 · GATE IN</span>
+            <strong id="doorOpenedTime">—</strong>
+            <small id="doorOpenedDetail">Scheduled or revised gate arrival</small>
+            <button id="doorOpenedButton" type="button">Doors opened now</button>
+          </article>
         </div>
       </div>
 
@@ -426,9 +530,9 @@
 
       <div class="timeline">
         <div class="timeline-time">
-          <div><span>DEPARTURE</span><strong id="originTime">—</strong></div>
+          <div><span>TAKEOFF</span><strong id="originTime">—</strong></div>
           <div class="current-time"><span>SIMULATED TIME</span><strong id="currentFlightTime">—</strong></div>
-          <div><span>ARRIVAL</span><strong id="destinationTime">—</strong></div>
+          <div><span>LANDING</span><strong id="destinationTime">—</strong></div>
         </div>
         <div class="timeline-labels">
           <b id="originCode"></b>
@@ -748,31 +852,58 @@ function nearestRouteProgress(fix) {
   return best;
 }
 
-function plannedDuration() {
-  return Math.max(60000, flightTimestamp(journey.flight.arrivalUtc) - flightTimestamp(journey.flight.departureUtc));
-}
-
 function trackingState() {
   if (!journey.tracking) journey.tracking = {};
   return journey.tracking;
 }
 
-function effectiveArrivalTime() {
+function optionalTimestamp(value) {
+  const timestamp = value ? flightTimestamp(value) : NaN;
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function airborneWindow() {
   const tracking = trackingState();
-  return tracking.actualTakeoffMs
-    ? tracking.actualTakeoffMs + plannedDuration()
-    : flightTimestamp(journey.flight.arrivalUtc);
+  const providerGateOut = optionalTimestamp(journey.flight.departureUtc) || Date.now();
+  const providerGateIn = optionalTimestamp(journey.flight.arrivalUtc) || providerGateOut + 3600000;
+  const baselineBlockDuration = Math.max(1800000, providerGateIn - providerGateOut);
+  const gateOut = tracking.doorClosedMs || providerGateOut;
+  let gateIn = tracking.doorOpenedMs || (tracking.doorClosedMs ? gateOut + baselineBlockDuration : providerGateIn);
+  const blockDuration = Math.max(1800000, gateIn - gateOut);
+  const taxiOut = Math.min(20 * 60000, Math.max(8 * 60000, blockDuration * .08));
+  const taxiIn = Math.min(15 * 60000, Math.max(6 * 60000, blockDuration * .05));
+  const providerTakeoff = optionalTimestamp(journey.flight.departureRunwayUtc) || providerGateOut + taxiOut;
+  const providerLanding = optionalTimestamp(journey.flight.arrivalRunwayUtc) || providerGateIn - taxiIn;
+  const baselineAirborneDuration = Math.max(60000, providerLanding - providerTakeoff);
+  let takeoff = tracking.actualTakeoffMs || (tracking.doorClosedMs ? gateOut + taxiOut : providerTakeoff);
+  let landing = tracking.actualLandingMs || ((tracking.actualTakeoffMs || tracking.doorClosedMs) ? takeoff + baselineAirborneDuration : providerLanding);
+  if (!tracking.doorOpenedMs && (tracking.actualTakeoffMs || tracking.actualLandingMs)) gateIn = Math.max(gateIn, landing + taxiIn);
+  if (landing <= takeoff + 60000) {
+    takeoff = gateOut;
+    landing = Math.max(gateOut + 60000, gateIn);
+  }
+  return { gateOut, takeoff, landing, gateIn };
+}
+
+function plannedDuration() {
+  const window = airborneWindow();
+  return Math.max(60000, window.landing - window.takeoff);
+}
+
+function effectiveArrivalTime() {
+  return airborneWindow().landing;
 }
 
 function effectiveProgress() {
   const tracking = trackingState();
+  const window = airborneWindow();
   if (tracking.actualLandingMs) return 1;
   if (Number.isFinite(tracking.lastConfirmedProgress) && tracking.lastConfirmedAt) {
     const advanced = tracking.lastConfirmedProgress + Math.max(0, Date.now() - tracking.lastConfirmedAt) / plannedDuration();
     return clamp(advanced, 0, .999);
   }
   if (tracking.actualTakeoffMs) return clamp((Date.now() - tracking.actualTakeoffMs) / plannedDuration(), 0, .999);
-  return currentClockProgress();
+  return clamp((Date.now() - window.takeoff) / Math.max(60000, window.landing - window.takeoff));
 }
 
 function sensorSpeed(fix) {
@@ -784,11 +915,51 @@ function sensorSpeed(fix) {
   return distanceMetres(fix, previous) / seconds;
 }
 
-function sensorAltitudeFeet() {
+function sensorAltitudeReading() {
   const fix = sensorState.fix;
   if (!fix || !Number.isFinite(fix.altitude)) return null;
-  if (Number.isFinite(fix.altitudeAccuracy) && fix.altitudeAccuracy > 1500) return null;
-  return Math.round(fix.altitude * 3.28084);
+  const feet = Math.round(fix.altitude * 3.28084);
+  if (feet < -1500 || feet > 65000) return null;
+  return {
+    feet,
+    accuracyFeet: Number.isFinite(fix.altitudeAccuracy)
+      ? Math.round(fix.altitudeAccuracy * 3.28084)
+      : null
+  };
+}
+
+function estimatedCruiseAltitude() {
+  const minutes = plannedDuration() / 60000;
+  if (minutes <= 45) return 24000;
+  if (minutes <= 90) return 30000;
+  if (minutes <= 180) return 35000;
+  return 37000;
+}
+
+function estimatedAltitude(progress, now = Date.now()) {
+  const tracking = trackingState();
+  const window = airborneWindow();
+  if (tracking.actualLandingMs || tracking.doorOpenedMs) {
+    return { feet: 0, phase: tracking.doorOpenedMs ? "At the gate" : "On the ground", confidence: "confirmed" };
+  }
+  if (now >= window.landing) return { feet: 0, phase: "Estimated landing time reached", confidence: "estimated" };
+  if (now <= window.takeoff && previewProgress === null) {
+    return { feet: 0, phase: tracking.doorClosedMs ? "Taxiing or waiting for takeoff" : "Before takeoff", confidence: "estimated" };
+  }
+
+  const durationMinutes = plannedDuration() / 60000;
+  const elapsedMinutes = previewProgress === null
+    ? Math.max(0, (now - window.takeoff) / 60000)
+    : progress * durationMinutes;
+  const remainingMinutes = Math.max(0, durationMinutes - elapsedMinutes);
+  const climbMinutes = Math.min(22, Math.max(10, durationMinutes * .18));
+  const descentMinutes = Math.min(40, Math.max(18, durationMinutes * .25));
+  const cruise = estimatedCruiseAltitude();
+  const climbFactor = Math.min(clamp(elapsedMinutes / climbMinutes), clamp(progress / .15));
+  const descentFactor = Math.min(clamp(remainingMinutes / descentMinutes), clamp((1 - progress) / .25));
+  const feet = Math.round(cruise * Math.min(climbFactor, descentFactor) / 500) * 500;
+  const phase = climbFactor < 1 ? "Estimated climb" : descentFactor < 1 ? "Estimated descent" : "Estimated cruise";
+  return { feet: Math.max(0, feet), phase, confidence: "estimated" };
 }
 
 function updateSensorPanel() {
@@ -846,6 +1017,89 @@ function recordLanding(source = "manual") {
   tracking.landingSource = source;
   saveJourney();
   renderTracker();
+}
+
+function recordDoorClosed() {
+  const tracking = trackingState();
+  tracking.doorClosedMs = Date.now();
+  tracking.doorClosedSource = "manual";
+  saveJourney();
+  renderTracker();
+}
+
+function recordDoorOpened() {
+  const tracking = trackingState();
+  const now = Date.now();
+  tracking.doorOpenedMs = now;
+  tracking.doorOpenedSource = "manual";
+  if (!tracking.actualLandingMs) {
+    const providerLanding = optionalTimestamp(journey.flight.arrivalRunwayUtc);
+    tracking.actualLandingMs = providerLanding && providerLanding <= now ? providerLanding : now;
+    tracking.landingSource = providerLanding && providerLanding <= now ? "provider" : "gate-confirmation";
+  }
+  tracking.lastConfirmedProgress = 1;
+  tracking.lastConfirmedAt = now;
+  saveJourney();
+  renderTracker();
+}
+
+function milestoneClock(timestamp, timeZone) {
+  return timestamp ? formatTimelineClock(timestamp, timeZone) : "—";
+}
+
+function setMilestone(name, timestamp, timeZone, detail, confirmed) {
+  $(`${name}Time`).textContent = milestoneClock(timestamp, timeZone);
+  $(`${name}Detail`).textContent = detail;
+  $(`${name}Card`).classList.toggle("confirmed", confirmed);
+}
+
+function updateMilestones() {
+  const tracking = trackingState();
+  const window = airborneWindow();
+  const originZone = journey.flight.origin.timeZone;
+  const destinationZone = journey.flight.destination.timeZone;
+  const gateOutProvider = optionalTimestamp(journey.flight.departureUtc);
+  const gateInProvider = optionalTimestamp(journey.flight.arrivalUtc);
+  const takeoffProvider = optionalTimestamp(journey.flight.departureRunwayUtc);
+  const landingProvider = optionalTimestamp(journey.flight.arrivalRunwayUtc);
+
+  setMilestone(
+    "doorClosed",
+    tracking.doorClosedMs || gateOutProvider,
+    originZone,
+    tracking.doorClosedMs ? "Confirmed by you" : journey.flight.departureRevisedUtc ? "Provider revised gate time" : "Provider scheduled/estimated gate time",
+    Boolean(tracking.doorClosedMs)
+  );
+  setMilestone(
+    "takeoff",
+    tracking.actualTakeoffMs || takeoffProvider || window.takeoff,
+    originZone,
+    tracking.actualTakeoffMs
+      ? `Confirmed by ${tracking.takeoffSource === "phone" ? "phone location" : "you"}`
+      : takeoffProvider ? "Provider runway time" : "Estimated from gate departure",
+    Boolean(tracking.actualTakeoffMs)
+  );
+  setMilestone(
+    "landed",
+    tracking.actualLandingMs || landingProvider || window.landing,
+    destinationZone,
+    tracking.actualLandingMs
+      ? `Confirmed by ${tracking.landingSource === "phone" ? "phone location" : tracking.landingSource === "provider" ? "provider runway time" : "you"}`
+      : landingProvider ? "Provider runway time" : "Estimated from gate arrival",
+    Boolean(tracking.actualLandingMs)
+  );
+  setMilestone(
+    "doorOpened",
+    tracking.doorOpenedMs || gateInProvider,
+    destinationZone,
+    tracking.doorOpenedMs ? "Confirmed by you" : journey.flight.arrivalRevisedUtc ? "Provider revised gate time" : "Provider scheduled/estimated gate time",
+    Boolean(tracking.doorOpenedMs)
+  );
+
+  $("doorClosedButton").textContent = tracking.doorClosedMs ? "Update gate-out to now" : "Doors closed now";
+  $("takeoffButton").textContent = tracking.actualTakeoffMs ? "Update takeoff to now" : "We just took off";
+  $("landedButton").textContent = tracking.actualLandingMs ? "Update landing to now" : "We have landed";
+  $("doorOpenedButton").textContent = tracking.doorOpenedMs ? "Update gate-in to now" : "Doors opened now";
 }
 
 function handleSensorPosition(position) {
@@ -934,9 +1188,8 @@ function toggleSensorAssist() {
 }
 
 function currentClockProgress() {
-  const start = flightTimestamp(journey.flight.departureUtc);
-  const end = flightTimestamp(journey.flight.arrivalUtc);
-  return clamp((Date.now() - start) / (end - start));
+  const window = airborneWindow();
+  return clamp((Date.now() - window.takeoff) / Math.max(60000, window.landing - window.takeoff));
 }
 
 function updatePlaneMarker(progress) {
@@ -953,9 +1206,9 @@ function formatTimelineClock(milliseconds, timeZone) {
 }
 
 function updateTimelineTimes(progress) {
-  const tracking = trackingState();
-  const departure = tracking.actualTakeoffMs || flightTimestamp(journey.flight.departureUtc);
-  const arrival = effectiveArrivalTime();
+  const window = airborneWindow();
+  const departure = window.takeoff;
+  const arrival = window.landing;
   const current = departure + (arrival - departure) * progress;
   const currentZone = progress < .5
     ? journey.flight.origin.timeZone
@@ -987,9 +1240,11 @@ function renderTracker() {
   const point = interpolateRoute(journey.route.points, progress);
   const now = Date.now();
   const tracking = trackingState();
-  const departure = tracking.actualTakeoffMs || flightTimestamp(journey.flight.departureUtc);
-  const arrival = effectiveArrivalTime();
-  const phoneAltitude = previewProgress === null && sensorState.status === "locked" ? sensorAltitudeFeet() : null;
+  const window = airborneWindow();
+  const departure = window.takeoff;
+  const arrival = window.landing;
+  const phoneAltitude = previewProgress === null && sensorState.status === "locked" ? sensorAltitudeReading() : null;
+  const fallbackAltitude = estimatedAltitude(progress, now);
   const phonePosition = previewProgress === null && sensorState.status === "locked" && sensorState.fix;
 
   updatePlaneMarker(progress);
@@ -1001,27 +1256,43 @@ function renderTracker() {
   $("latitude").textContent = `${Math.abs(displayedPosition.lat).toFixed(2)}°${displayedPosition.lat >= 0 ? "N" : "S"}`;
   $("longitude").textContent = `${Math.abs(displayedPosition.lon).toFixed(2)}°${displayedPosition.lon >= 0 ? "E" : "W"}`;
   $("altitudeLabel").textContent = phoneAltitude === null ? "ESTIMATED ALTITUDE" : "PHONE-REPORTED ALTITUDE";
-  $("altitude").textContent = `${Math.max(0, phoneAltitude === null ? point.altitudeFt || 0 : phoneAltitude).toLocaleString()} ft`;
-  $("altitudeDetail").textContent = phoneAltitude === null
-    ? "Derived from the usual route profile"
-    : `GPS reading${Number.isFinite(sensorState.fix.altitudeAccuracy) ? ` · ±${Math.round(sensorState.fix.altitudeAccuracy * 3.28084).toLocaleString()} ft` : ""}`;
+  $("altitude").textContent = phoneAltitude === null
+    ? `${fallbackAltitude.confidence === "estimated" ? "≈ " : ""}${Math.max(0, fallbackAltitude.feet).toLocaleString()} ft`
+    : `${Math.max(0, phoneAltitude.feet).toLocaleString()} ft`;
+  if (phoneAltitude !== null) {
+    $("altitudeDetail").textContent = phoneAltitude.accuracyFeet === null
+      ? "GPS altitude · accuracy not supplied by the phone"
+      : `GPS altitude · ±${phoneAltitude.accuracyFeet.toLocaleString()} ft${phoneAltitude.accuracyFeet > 6500 ? " · low confidence" : ""}`;
+  } else if (fallbackAltitude.confidence === "confirmed") {
+    $("altitudeDetail").textContent = fallbackAltitude.phase;
+  } else {
+    const range = Math.max(1500, Math.round(fallbackAltitude.feet * .25 / 500) * 500);
+    const low = Math.max(0, fallbackAltitude.feet - range);
+    const high = fallbackAltitude.feet + range;
+    $("altitudeDetail").textContent = `${fallbackAltitude.phase} · likely ${low.toLocaleString()}–${high.toLocaleString()} ft · not live aircraft data`;
+  }
   updateTimelineTimes(progress);
   updateFlyingOver(point, progress);
+  updateMilestones();
 
   if (previewProgress !== null) {
     $("phaseLabel").textContent = "PREVIEW MODE";
     $("remainingTime").textContent = `${Math.round(progress * 100)}%`;
     $("phaseDetail").textContent = "Move the slider to explore the route";
-  } else if (now < departure) {
-    $("phaseLabel").textContent = "DEPARTS IN";
-    $("remainingTime").textContent = formatDuration(departure - now);
-    $("phaseDetail").textContent = "Waiting for the scheduled departure time";
+  } else if (tracking.doorOpenedMs) {
+    $("phaseLabel").textContent = "JOURNEY STATUS";
+    $("remainingTime").textContent = "At gate";
+    $("phaseDetail").textContent = "Gate arrival confirmed";
   } else if (tracking.actualLandingMs || now >= arrival) {
     $("phaseLabel").textContent = "JOURNEY STATUS";
     $("remainingTime").textContent = "Landed";
     $("phaseDetail").textContent = tracking.actualLandingMs
-      ? `Landing confirmed by ${tracking.landingSource === "phone" ? "phone location" : "you"}`
-      : "Estimated journey complete";
+      ? `Landing confirmed by ${tracking.landingSource === "phone" ? "phone location" : tracking.landingSource === "provider" ? "provider runway time" : tracking.landingSource === "gate-confirmation" ? "gate arrival" : "you"}`
+      : "Estimated landing time reached · awaiting gate arrival";
+  } else if (now < departure) {
+    $("phaseLabel").textContent = tracking.doorClosedMs ? "TAXI / WAITING" : "TAKEOFF IN";
+    $("remainingTime").textContent = formatDuration(departure - now);
+    $("phaseDetail").textContent = tracking.doorClosedMs ? "Gate departure confirmed · waiting for takeoff" : "Waiting for the estimated takeoff time";
   } else {
     $("phaseLabel").textContent = "TIME REMAINING";
     $("remainingTime").textContent = formatDuration(arrival - now);
@@ -1046,7 +1317,7 @@ function openJourney(data) {
   $("destinationCity").textContent = data.flight.destination.city || data.flight.destination.code;
   $("originCode").textContent = data.flight.origin.code;
   $("destinationCode").textContent = data.flight.destination.code;
-  $("arrivalTime").textContent = `Estimated arrival ${formatClock(data.flight.arrivalUtc, data.flight.destination.timeZone)}`;
+  $("arrivalTime").textContent = `Estimated gate arrival ${formatClock(data.flight.arrivalUtc, data.flight.destination.timeZone)}`;
   $("routeSource").textContent = data.route.sampleCount > 0 ? `Usual path from ${data.route.sampleCount} recent track${data.route.sampleCount === 1 ? "" : "s"}` : "Schedule-based route estimate";
   $("confidence").textContent = data.route.confidence;
   $("sampleDetail").textContent = data.route.sampleCount ? `${data.route.sampleCount} completed flights analysed` : "Airport-to-airport geometry; not a filed route";
@@ -1204,8 +1475,10 @@ $("clockButton").addEventListener("click", () => {
 });
 $("changeFlight").addEventListener("click", showFreshJourney);
 $("sensorButton").addEventListener("click", toggleSensorAssist);
+$("doorClosedButton").addEventListener("click", recordDoorClosed);
 $("takeoffButton").addEventListener("click", () => recordTakeoff("manual"));
 $("landedButton").addEventListener("click", () => recordLanding("manual"));
+$("doorOpenedButton").addEventListener("click", recordDoorOpened);
 $("refreshFlight").addEventListener("click", () => refreshFlightData());
 window.addEventListener("online", handleOnline);
 window.addEventListener("offline", setNetworkState);
@@ -1213,7 +1486,7 @@ window.addEventListener("offline", setNetworkState);
 setDefaultDate();
 setNetworkState();
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("./sw.js?v=17").then(registration => {
+  navigator.serviceWorker.register("./sw.js?v=18").then(registration => {
     registration.update().catch(() => {});
   }).catch(() => {});
 }

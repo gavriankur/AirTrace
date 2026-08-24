@@ -80,7 +80,7 @@ async function prepareJourney(ident, date, apiKey) {
   if (!departureUtc || !arrivalUtc || Date.parse(arrivalUtc) <= Date.parse(departureUtc)) throw new HttpError(502, "The provider returned incomplete departure or arrival times.");
 
   return {
-    schemaVersion: 4,
+    schemaVersion: 5,
     preparedAt: new Date().toISOString(),
     provider: "AeroDataBox",
     lookup: { flight: ident, date },
@@ -93,6 +93,10 @@ async function prepareJourney(ident, date, apiKey) {
       arrivalUtc,
       scheduledDepartureUtc: target.departure?.scheduledTime?.utc || null,
       scheduledArrivalUtc: target.arrival?.scheduledTime?.utc || null,
+      departureRevisedUtc: target.departure?.revisedTime?.utc || null,
+      arrivalRevisedUtc: target.arrival?.revisedTime?.utc || null,
+      departurePredictedUtc: target.departure?.predictedTime?.utc || null,
+      arrivalPredictedUtc: target.arrival?.predictedTime?.utc || null,
       departureRunwayUtc: target.departure?.runwayTime?.utc || null,
       arrivalRunwayUtc: target.arrival?.runwayTime?.utc || null,
       arrivalGate: target.arrival?.gate || null,
@@ -102,7 +106,12 @@ async function prepareJourney(ident, date, apiKey) {
       origin,
       destination
     },
-    route: { source: "schedule-estimate", sampleCount: 0, confidence: "Low", points: greatCircleRoute(origin, destination) }
+    route: {
+      source: "schedule-estimate",
+      sampleCount: 0,
+      confidence: "Low",
+      points: greatCircleRoute(origin, destination, Date.parse(departureUtc), Date.parse(arrivalUtc))
+    }
   };
 }
 
@@ -153,10 +162,29 @@ function fromCartesian(point) {
   return { lat: Math.atan2(point.z, Math.sqrt(point.x ** 2 + point.y ** 2)) * 180 / Math.PI, lon: Math.atan2(point.y, point.x) * 180 / Math.PI };
 }
 
-function greatCircleRoute(origin, destination) {
+function cruiseAltitudeForMinutes(minutes) {
+  if (minutes <= 45) return 24000;
+  if (minutes <= 90) return 30000;
+  if (minutes <= 180) return 35000;
+  return 37000;
+}
+
+function profileAltitude(progress, durationMinutes) {
+  const cruise = cruiseAltitudeForMinutes(durationMinutes);
+  const elapsedMinutes = progress * durationMinutes;
+  const remainingMinutes = (1 - progress) * durationMinutes;
+  const climbMinutes = Math.min(22, Math.max(10, durationMinutes * .18));
+  const descentMinutes = Math.min(40, Math.max(18, durationMinutes * .25));
+  const climbFactor = Math.max(0, Math.min(1, elapsedMinutes / climbMinutes));
+  const descentFactor = Math.max(0, Math.min(1, remainingMinutes / descentMinutes));
+  return Math.max(0, Math.round(cruise * Math.min(climbFactor, descentFactor) / 500) * 500);
+}
+
+function greatCircleRoute(origin, destination, departureMs, arrivalMs) {
   const a = toCartesian(origin);
   const b = toCartesian(destination);
   const angle = Math.acos(Math.max(-1, Math.min(1, a.x * b.x + a.y * b.y + a.z * b.z)));
+  const durationMinutes = Math.max(30, (arrivalMs - departureMs) / 60000);
   const points = [];
   for (let index = 0; index <= 120; index++) {
     const progress = index / 120;
@@ -164,7 +192,7 @@ function greatCircleRoute(origin, destination) {
     const left = Math.sin((1 - progress) * angle) / sinAngle;
     const right = Math.sin(progress * angle) / sinAngle;
     const coordinate = fromCartesian({ x: left * a.x + right * b.x, y: left * a.y + right * b.y, z: left * a.z + right * b.z });
-    const altitudeFt = Math.round(37000 * Math.min(1, progress / .12, (1 - progress) / .12));
+    const altitudeFt = profileAltitude(progress, durationMinutes);
     points.push({ progress, ...coordinate, altitudeFt: Math.max(0, altitudeFt) });
   }
   return points;
