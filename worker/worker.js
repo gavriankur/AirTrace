@@ -68,7 +68,7 @@ async function providerGet(path, apiKey) {
 }
 
 async function prepareJourney(ident, date, apiKey) {
-  const path = `/flights/number/${encodeURIComponent(ident)}/${date}?dateLocalRole=Departure&withAircraftImage=false&withLocation=false&withFlightPlan=false`;
+  const path = `/flights/number/${encodeURIComponent(ident)}/${date}?dateLocalRole=Departure&withAircraftImage=false&withLocation=true&withFlightPlan=false`;
   const flights = await providerGet(path, apiKey);
   if (!Array.isArray(flights) || !flights.length) throw new HttpError(404, `No ${ident} departure was found on ${date}.`);
 
@@ -82,7 +82,7 @@ async function prepareJourney(ident, date, apiKey) {
   const estimatedAirborneMinutes = estimateAirborneMinutes(greatCircleDistanceKm, target.aircraft?.model);
 
   return {
-    schemaVersion: 6,
+    schemaVersion: 7,
     preparedAt: new Date().toISOString(),
     provider: "AeroDataBox",
     lookup: { flight: ident, date },
@@ -105,6 +105,7 @@ async function prepareJourney(ident, date, apiKey) {
       arrivalTerminal: target.arrival?.terminal || null,
       baggageBelt: target.arrival?.baggageBelt || null,
       providerLastUpdatedUtc: target.lastUpdatedUtc || null,
+      liveLocation: flightLocationSummary(target.location),
       greatCircleDistanceKm,
       estimatedAirborneMinutes,
       origin,
@@ -156,6 +157,25 @@ function airportSummary(airport) {
   };
 }
 
+function flightLocationSummary(location) {
+  const lat = Number(location?.lat);
+  const lon = Number(location?.lon);
+  const reportedAtUtc = location?.reportedAtUtc || null;
+  if (!Number.isFinite(lat) || !Number.isFinite(lon) || !reportedAtUtc) return null;
+  const altitudeFt = Number(location?.altitude?.feet ?? location?.pressureAltitude?.feet);
+  const groundSpeedKt = Number(location?.groundSpeed?.kt);
+  const trueTrackDeg = Number(location?.trueTrack?.deg);
+  return {
+    lat,
+    lon,
+    reportedAtUtc,
+    altitudeFt: Number.isFinite(altitudeFt) ? Math.round(altitudeFt) : null,
+    groundSpeedKt: Number.isFinite(groundSpeedKt) ? Math.round(groundSpeedKt) : null,
+    trueTrackDeg: Number.isFinite(trueTrackDeg) ? trueTrackDeg : null,
+    verticalSpeedFpm: Number.isFinite(Number(location?.vsiFpm)) ? Number(location.vsiFpm) : null
+  };
+}
+
 function toCartesian(point) {
   const lat = point.lat * Math.PI / 180;
   const lon = point.lon * Math.PI / 180;
@@ -183,22 +203,22 @@ function estimateAirborneMinutes(distanceKm, aircraftType = "") {
 
   if (turboprop) {
     speedKmh = 470;
-    climbAndApproachMinutes = 14;
+    climbAndApproachMinutes = 10;
   } else if (distanceKm <= 350) {
-    speedKmh = 520;
-    climbAndApproachMinutes = 15;
-  } else if (distanceKm <= 800) {
+    speedKmh = 550;
+    climbAndApproachMinutes = 12;
+  } else if (distanceKm <= 1000) {
     speedKmh = 650;
-    climbAndApproachMinutes = 18;
+    climbAndApproachMinutes = 10;
   } else if (distanceKm <= 1600) {
-    speedKmh = 740;
-    climbAndApproachMinutes = 20;
+    speedKmh = 760;
+    climbAndApproachMinutes = 8;
   } else if (distanceKm <= 3500) {
-    speedKmh = 800;
-    climbAndApproachMinutes = 25;
+    speedKmh = 830;
+    climbAndApproachMinutes = 5;
   } else {
     speedKmh = 870;
-    climbAndApproachMinutes = 30;
+    climbAndApproachMinutes = 15;
   }
 
   return Math.round(Math.max(30, distanceKm / speedKmh * 60 + climbAndApproachMinutes));

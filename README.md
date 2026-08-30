@@ -12,10 +12,12 @@ Manual **We just took off** and **We have landed** controls remain available bec
 
 When connectivity returns, **Refresh live details** retrieves revised flight information and an arrival baggage belt when AeroDataBox supplies one. Baggage information cannot be refreshed while fully offline.
 
-## v19 independent airborne clock
+## v20 live-data safeguards
 
 AirTrace keeps gate/block and airborne milestones separate: gate out, wheels up, wheels down, and gate in. Published block duration is used only for gate milestones. It never determines the aircraft's airborne progress or altitude.
 
 The airborne clock prioritises a manually or sensor-confirmed takeoff, followed by a plausible provider runway interval. When those are unavailable, duration is estimated independently from great-circle distance and aircraft type. Implausible provider runway intervals are rejected so schedule padding cannot turn a roughly 90-minute flight into a four-hour simulation.
+
+V20 also rejects a runway departure timestamp that is earlier than a newer revised departure, requests provider positional data when available, and recalibrates medium-distance jet timing. A clock reaching 100% no longer claims that the aircraft has landed: landing is shown as confirmed only after a provider, phone-sensor, or manual confirmation.
 
 Phone-reported GPS altitude takes priority whenever the browser supplies it, including low-confidence readings that are clearly labelled with their accuracy. When GPS altitude is unavailable, the fallback uses flight duration, elapsed airborne time, and time remaining to model climb and descent. It is displayed with an approximation mark and likely range instead of presenting a synthetic cruise altitude as exact.
