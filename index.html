@@ -423,7 +423,7 @@
             <span>BLOCK & FLIGHT MILESTONES</span>
             <strong>Gate to gate</strong>
           </div>
-          <small>Provider times are used when available. Tap a milestone to correct it offline.</small>
+          <small>Block times are gate-only. Airborne timing uses confirmed runway events or a distance model.</small>
         </div>
 
         <div class="milestone-grid">
@@ -862,27 +862,107 @@ function optionalTimestamp(value) {
   return Number.isFinite(timestamp) ? timestamp : null;
 }
 
+function greatCircleDistanceKm() {
+  const supplied = Number(journey.flight.greatCircleDistanceKm);
+  if (Number.isFinite(supplied) && supplied > 0) return supplied;
+  return Math.round(distanceMetres(journey.flight.origin, journey.flight.destination) / 1000);
+}
+
+function distanceBasedAirborneMinutes() {
+  const supplied = Number(journey.flight.estimatedAirborneMinutes);
+  if (Number.isFinite(supplied) && supplied >= 30) return supplied;
+
+  const distanceKm = greatCircleDistanceKm();
+  const aircraft = String(journey.flight.aircraftType || "");
+  const turboprop = /\b(ATR|AT4|AT7|DHC|DH8|Q[1-4]00|DASH\s*8)\b/i.test(aircraft);
+  let speedKmh;
+  let climbAndApproachMinutes;
+
+  if (turboprop) {
+    speedKmh = 470;
+    climbAndApproachMinutes = 14;
+  } else if (distanceKm <= 350) {
+    speedKmh = 520;
+    climbAndApproachMinutes = 15;
+  } else if (distanceKm <= 800) {
+    speedKmh = 650;
+    climbAndApproachMinutes = 18;
+  } else if (distanceKm <= 1600) {
+    speedKmh = 740;
+    climbAndApproachMinutes = 20;
+  } else if (distanceKm <= 3500) {
+    speedKmh = 800;
+    climbAndApproachMinutes = 25;
+  } else {
+    speedKmh = 870;
+    climbAndApproachMinutes = 30;
+  }
+
+  return Math.round(Math.max(30, distanceKm / speedKmh * 60 + climbAndApproachMinutes));
+}
+
+function airbornePlan() {
+  const distanceKm = greatCircleDistanceKm();
+  const estimatedMinutes = distanceBasedAirborneMinutes();
+  const estimatedMs = estimatedMinutes * 60000;
+  const providerTakeoff = optionalTimestamp(journey.flight.departureRunwayUtc);
+  const providerLanding = optionalTimestamp(journey.flight.arrivalRunwayUtc);
+  const providerDurationMs = providerTakeoff && providerLanding && providerLanding > providerTakeoff
+    ? providerLanding - providerTakeoff
+    : null;
+  const minimumPlausibleMs = Math.max(20, estimatedMinutes * .55) * 60000;
+  const maximumPlausibleMs = Math.max(45, estimatedMinutes * 1.65) * 60000;
+  const providerAccepted = providerDurationMs !== null
+    && providerDurationMs >= minimumPlausibleMs
+    && providerDurationMs <= maximumPlausibleMs;
+
+  return {
+    distanceKm,
+    estimatedMinutes,
+    estimatedMs,
+    providerTakeoff,
+    providerLanding,
+    providerDurationMs,
+    providerAccepted,
+    providerRejected: providerDurationMs !== null && !providerAccepted
+  };
+}
+
 function airborneWindow() {
   const tracking = trackingState();
+  const plan = airbornePlan();
   const providerGateOut = optionalTimestamp(journey.flight.departureUtc) || Date.now();
   const providerGateIn = optionalTimestamp(journey.flight.arrivalUtc) || providerGateOut + 3600000;
   const baselineBlockDuration = Math.max(1800000, providerGateIn - providerGateOut);
   const gateOut = tracking.doorClosedMs || providerGateOut;
   let gateIn = tracking.doorOpenedMs || (tracking.doorClosedMs ? gateOut + baselineBlockDuration : providerGateIn);
-  const blockDuration = Math.max(1800000, gateIn - gateOut);
-  const taxiOut = Math.min(20 * 60000, Math.max(8 * 60000, blockDuration * .08));
-  const taxiIn = Math.min(15 * 60000, Math.max(6 * 60000, blockDuration * .05));
-  const providerTakeoff = optionalTimestamp(journey.flight.departureRunwayUtc) || providerGateOut + taxiOut;
-  const providerLanding = optionalTimestamp(journey.flight.arrivalRunwayUtc) || providerGateIn - taxiIn;
-  const baselineAirborneDuration = Math.max(60000, providerLanding - providerTakeoff);
-  let takeoff = tracking.actualTakeoffMs || (tracking.doorClosedMs ? gateOut + taxiOut : providerTakeoff);
-  let landing = tracking.actualLandingMs || ((tracking.actualTakeoffMs || tracking.doorClosedMs) ? takeoff + baselineAirborneDuration : providerLanding);
+  const taxiOut = 12 * 60000;
+  const taxiIn = 10 * 60000;
+  let timingSource = "distance";
+  let takeoff;
+  let landing;
+
+  if (tracking.actualTakeoffMs) {
+    takeoff = tracking.actualTakeoffMs;
+    landing = tracking.actualLandingMs || takeoff + plan.estimatedMs;
+    timingSource = tracking.actualLandingMs ? "confirmed" : "confirmed-takeoff-distance";
+  } else if (plan.providerTakeoff) {
+    takeoff = plan.providerTakeoff;
+    landing = plan.providerAccepted ? plan.providerLanding : takeoff + plan.estimatedMs;
+    timingSource = plan.providerAccepted ? "provider-runway" : "provider-takeoff-distance";
+  } else {
+    takeoff = gateOut + taxiOut;
+    landing = takeoff + plan.estimatedMs;
+    timingSource = tracking.doorClosedMs ? "confirmed-gate-distance" : "gate-distance";
+  }
+
+  if (tracking.actualLandingMs) landing = tracking.actualLandingMs;
   if (!tracking.doorOpenedMs && (tracking.actualTakeoffMs || tracking.actualLandingMs)) gateIn = Math.max(gateIn, landing + taxiIn);
   if (landing <= takeoff + 60000) {
-    takeoff = gateOut;
-    landing = Math.max(gateOut + 60000, gateIn);
+    landing = takeoff + plan.estimatedMs;
+    timingSource = "distance";
   }
-  return { gateOut, takeoff, landing, gateIn };
+  return { gateOut, takeoff, landing, gateIn, timingSource, plan };
 }
 
 function plannedDuration() {
@@ -1053,6 +1133,17 @@ function setMilestone(name, timestamp, timeZone, detail, confirmed) {
   $(`${name}Card`).classList.toggle("confirmed", confirmed);
 }
 
+function airborneTimingLabel(window, event) {
+  const distance = `${window.plan.distanceKm.toLocaleString()} km`;
+  const duration = formatDuration(window.landing - window.takeoff);
+  if (window.timingSource === "provider-runway") return "Provider runway time · plausibility checked";
+  if (window.timingSource === "confirmed") return event === "takeoff" ? "Confirmed takeoff" : "Confirmed landing";
+  if (event === "takeoff" && window.timingSource.startsWith("provider-takeoff")) return "Provider runway takeoff";
+  if (event === "takeoff" && window.timingSource.startsWith("confirmed")) return "Confirmed takeoff";
+  const rejected = window.plan.providerRejected ? " · padded runway interval ignored" : "";
+  return `Distance-based ${duration} airborne estimate · ${distance}${rejected}`;
+}
+
 function updateMilestones() {
   const tracking = trackingState();
   const window = airborneWindow();
@@ -1061,7 +1152,6 @@ function updateMilestones() {
   const gateOutProvider = optionalTimestamp(journey.flight.departureUtc);
   const gateInProvider = optionalTimestamp(journey.flight.arrivalUtc);
   const takeoffProvider = optionalTimestamp(journey.flight.departureRunwayUtc);
-  const landingProvider = optionalTimestamp(journey.flight.arrivalRunwayUtc);
 
   setMilestone(
     "doorClosed",
@@ -1072,20 +1162,20 @@ function updateMilestones() {
   );
   setMilestone(
     "takeoff",
-    tracking.actualTakeoffMs || takeoffProvider || window.takeoff,
+    tracking.actualTakeoffMs || window.takeoff,
     originZone,
     tracking.actualTakeoffMs
       ? `Confirmed by ${tracking.takeoffSource === "phone" ? "phone location" : "you"}`
-      : takeoffProvider ? "Provider runway time" : "Estimated from gate departure",
+      : takeoffProvider ? "Provider runway takeoff" : "Estimated taxi-out anchor · block duration excluded",
     Boolean(tracking.actualTakeoffMs)
   );
   setMilestone(
     "landed",
-    tracking.actualLandingMs || landingProvider || window.landing,
+    tracking.actualLandingMs || window.landing,
     destinationZone,
     tracking.actualLandingMs
       ? `Confirmed by ${tracking.landingSource === "phone" ? "phone location" : tracking.landingSource === "provider" ? "provider runway time" : "you"}`
-      : landingProvider ? "Provider runway time" : "Estimated from gate arrival",
+      : airborneTimingLabel(window, "landing"),
     Boolean(tracking.actualLandingMs)
   );
   setMilestone(
@@ -1318,9 +1408,15 @@ function openJourney(data) {
   $("originCode").textContent = data.flight.origin.code;
   $("destinationCode").textContent = data.flight.destination.code;
   $("arrivalTime").textContent = `Estimated gate arrival ${formatClock(data.flight.arrivalUtc, data.flight.destination.timeZone)}`;
-  $("routeSource").textContent = data.route.sampleCount > 0 ? `Usual path from ${data.route.sampleCount} recent track${data.route.sampleCount === 1 ? "" : "s"}` : "Schedule-based route estimate";
+  const distanceKm = greatCircleDistanceKm();
+  const airborneMinutes = distanceBasedAirborneMinutes();
+  $("routeSource").textContent = data.route.sampleCount > 0
+    ? `Usual path from ${data.route.sampleCount} recent track${data.route.sampleCount === 1 ? "" : "s"}`
+    : `Distance-timed route · ${distanceKm.toLocaleString()} km · ~${formatDuration(airborneMinutes * 60000)} airborne`;
   $("confidence").textContent = data.route.confidence;
-  $("sampleDetail").textContent = data.route.sampleCount ? `${data.route.sampleCount} completed flights analysed` : "Airport-to-airport geometry; not a filed route";
+  $("sampleDetail").textContent = data.route.sampleCount
+    ? `${data.route.sampleCount} completed flights analysed`
+    : "Airport-to-airport geometry · published block duration excluded";
   updateSensorPanel();
   initializeMap();
   updateMapRoute();
@@ -1486,7 +1582,7 @@ window.addEventListener("offline", setNetworkState);
 setDefaultDate();
 setNetworkState();
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("./sw.js?v=18").then(registration => {
+  navigator.serviceWorker.register("./sw.js?v=19").then(registration => {
     registration.update().catch(() => {});
   }).catch(() => {});
 }

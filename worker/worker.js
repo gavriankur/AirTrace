@@ -78,9 +78,11 @@ async function prepareJourney(ident, date, apiKey) {
   const departureUtc = movementTime(target.departure);
   const arrivalUtc = movementTime(target.arrival);
   if (!departureUtc || !arrivalUtc || Date.parse(arrivalUtc) <= Date.parse(departureUtc)) throw new HttpError(502, "The provider returned incomplete departure or arrival times.");
+  const greatCircleDistanceKm = routeDistanceKm(origin, destination);
+  const estimatedAirborneMinutes = estimateAirborneMinutes(greatCircleDistanceKm, target.aircraft?.model);
 
   return {
-    schemaVersion: 5,
+    schemaVersion: 6,
     preparedAt: new Date().toISOString(),
     provider: "AeroDataBox",
     lookup: { flight: ident, date },
@@ -103,14 +105,16 @@ async function prepareJourney(ident, date, apiKey) {
       arrivalTerminal: target.arrival?.terminal || null,
       baggageBelt: target.arrival?.baggageBelt || null,
       providerLastUpdatedUtc: target.lastUpdatedUtc || null,
+      greatCircleDistanceKm,
+      estimatedAirborneMinutes,
       origin,
       destination
     },
     route: {
-      source: "schedule-estimate",
+      source: "distance-timed-estimate",
       sampleCount: 0,
       confidence: "Low",
-      points: greatCircleRoute(origin, destination, Date.parse(departureUtc), Date.parse(arrivalUtc))
+      points: greatCircleRoute(origin, destination, estimatedAirborneMinutes)
     }
   };
 }
@@ -162,6 +166,44 @@ function fromCartesian(point) {
   return { lat: Math.atan2(point.z, Math.sqrt(point.x ** 2 + point.y ** 2)) * 180 / Math.PI, lon: Math.atan2(point.y, point.x) * 180 / Math.PI };
 }
 
+function routeDistanceKm(origin, destination) {
+  const radians = value => value * Math.PI / 180;
+  const lat1 = radians(origin.lat);
+  const lat2 = radians(destination.lat);
+  const deltaLat = lat2 - lat1;
+  const deltaLon = radians(destination.lon - origin.lon);
+  const haversine = Math.sin(deltaLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLon / 2) ** 2;
+  return Math.round(12742 * Math.asin(Math.min(1, Math.sqrt(haversine))));
+}
+
+function estimateAirborneMinutes(distanceKm, aircraftType = "") {
+  const turboprop = /\b(ATR|AT4|AT7|DHC|DH8|Q[1-4]00|DASH\s*8)\b/i.test(String(aircraftType));
+  let speedKmh;
+  let climbAndApproachMinutes;
+
+  if (turboprop) {
+    speedKmh = 470;
+    climbAndApproachMinutes = 14;
+  } else if (distanceKm <= 350) {
+    speedKmh = 520;
+    climbAndApproachMinutes = 15;
+  } else if (distanceKm <= 800) {
+    speedKmh = 650;
+    climbAndApproachMinutes = 18;
+  } else if (distanceKm <= 1600) {
+    speedKmh = 740;
+    climbAndApproachMinutes = 20;
+  } else if (distanceKm <= 3500) {
+    speedKmh = 800;
+    climbAndApproachMinutes = 25;
+  } else {
+    speedKmh = 870;
+    climbAndApproachMinutes = 30;
+  }
+
+  return Math.round(Math.max(30, distanceKm / speedKmh * 60 + climbAndApproachMinutes));
+}
+
 function cruiseAltitudeForMinutes(minutes) {
   if (minutes <= 45) return 24000;
   if (minutes <= 90) return 30000;
@@ -180,11 +222,11 @@ function profileAltitude(progress, durationMinutes) {
   return Math.max(0, Math.round(cruise * Math.min(climbFactor, descentFactor) / 500) * 500);
 }
 
-function greatCircleRoute(origin, destination, departureMs, arrivalMs) {
+function greatCircleRoute(origin, destination, durationMinutes) {
   const a = toCartesian(origin);
   const b = toCartesian(destination);
   const angle = Math.acos(Math.max(-1, Math.min(1, a.x * b.x + a.y * b.y + a.z * b.z)));
-  const durationMinutes = Math.max(30, (arrivalMs - departureMs) / 60000);
+  durationMinutes = Math.max(30, durationMinutes);
   const points = [];
   for (let index = 0; index <= 120; index++) {
     const progress = index / 120;
