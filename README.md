@@ -1,8 +1,12 @@
 # Airtrace
 
-Airtrace prepares a flight while the user is online, then estimates the aircraft's position while offline. It retrieves the itinerary by flight number, calculates an airport-to-airport route, stores the prepared journey locally, and advances a moving aircraft marker using the device clock.
+Airtrace prepares a flight while the user is online, then estimates the aircraft's position while offline. It retrieves the itinerary by passenger flight number or ATC callsign, calculates an airport-to-airport route, stores the prepared journey locally, and advances a moving aircraft marker using the device clock.
 
 This is an **estimated journey**, not live aircraft tracking.
+
+## v21 identifier lookup
+
+AirTrace accepts both passenger flight numbers such as `6E5184` and operational ATC callsigns such as `IGO376E`. It first checks the value as a flight number, then automatically retries it as a callsign when no numbered flight is found. A callsign result is saved using the resolved passenger flight number so subsequent live-detail refreshes remain stable.
 
 ## Sensor Assist (beta)
 

@@ -304,11 +304,12 @@
       <form class="prepare-card" id="prepareForm">
         <div class="fields">
           <label>
-            Flight number
+            Flight number or ATC callsign
 
             <input
               id="flightNumber"
               value="AI175"
+              placeholder="6E5184 or IGO376E"
               autocomplete="off"
               required
             >
@@ -1644,7 +1645,7 @@ window.addEventListener("offline", setNetworkState);
 setDefaultDate();
 setNetworkState();
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("./sw.js?v=20").then(registration => {
+  navigator.serviceWorker.register("./sw.js?v=21").then(registration => {
     registration.update().catch(() => {});
   }).catch(() => {});
 }

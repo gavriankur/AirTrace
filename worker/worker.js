@@ -26,7 +26,7 @@ class HttpError extends Error {
 
 function normalizeIdent(value) {
   const ident = String(value || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-  if (!/^[A-Z0-9]{3,8}$/.test(ident)) throw new HttpError(400, "Enter a valid airline flight number, such as AI175.");
+  if (!/^[A-Z0-9]{3,10}$/.test(ident)) throw new HttpError(400, "Enter a valid flight number or ATC callsign, such as 6E5184 or IGO376E.");
   return ident;
 }
 
@@ -52,7 +52,7 @@ function json(body, status, headers) {
   return new Response(JSON.stringify(body), { status, headers: { ...headers, "Content-Type": "application/json; charset=utf-8" } });
 }
 
-async function providerGet(path, apiKey) {
+async function providerGet(path, apiKey, options = {}) {
   const response = await fetch(`${AERODATABOX_BASE}${path}`, {
     headers: {
       "X-RapidAPI-Key": apiKey,
@@ -60,7 +60,10 @@ async function providerGet(path, apiKey) {
       "Accept": "application/json"
     }
   });
-  if (response.status === 204 || response.status === 404) throw new HttpError(404, "No matching flight was found for that departure date.");
+  if (response.status === 204 || response.status === 404) {
+    if (options.notFoundAsEmpty) return [];
+    throw new HttpError(404, "No matching flight was found for that departure date.");
+  }
   if (response.status === 401 || response.status === 403) throw new HttpError(502, "The AeroDataBox key is invalid or the free plan does not permit this request.");
   if (response.status === 429) throw new HttpError(429, "The free flight lookup quota is temporarily exhausted. Try again later.");
   if (!response.ok) throw new HttpError(502, `Flight lookup service error (${response.status}).`);
@@ -68,9 +71,20 @@ async function providerGet(path, apiKey) {
 }
 
 async function prepareJourney(ident, date, apiKey) {
-  const path = `/flights/number/${encodeURIComponent(ident)}/${date}?dateLocalRole=Departure&withAircraftImage=false&withLocation=true&withFlightPlan=false`;
-  const flights = await providerGet(path, apiKey);
-  if (!Array.isArray(flights) || !flights.length) throw new HttpError(404, `No ${ident} departure was found on ${date}.`);
+  const query = `dateLocalRole=Departure&withAircraftImage=false&withLocation=true&withFlightPlan=false`;
+  const numberPath = `/flights/number/${encodeURIComponent(ident)}/${date}?${query}`;
+  let searchBy = "number";
+  let flights = await providerGet(numberPath, apiKey, { notFoundAsEmpty: true });
+
+  if (!Array.isArray(flights) || !flights.length) {
+    const callSignPath = `/flights/callsign/${encodeURIComponent(ident)}/${date}?${query}`;
+    searchBy = "callsign";
+    flights = await providerGet(callSignPath, apiKey, { notFoundAsEmpty: true });
+  }
+
+  if (!Array.isArray(flights) || !flights.length) {
+    throw new HttpError(404, `No flight number or ATC callsign ${ident} was found departing on ${date}.`);
+  }
 
   const target = chooseFlight(flights, ident, date);
   const origin = airportSummary(target.departure?.airport);
@@ -82,12 +96,13 @@ async function prepareJourney(ident, date, apiKey) {
   const estimatedAirborneMinutes = estimateAirborneMinutes(greatCircleDistanceKm, target.aircraft?.model);
 
   return {
-    schemaVersion: 7,
+    schemaVersion: 8,
     preparedAt: new Date().toISOString(),
     provider: "AeroDataBox",
-    lookup: { flight: ident, date },
+    lookup: { flight: target.number || ident, entered: ident, searchBy, date },
     flight: {
       ident: target.number || ident,
+      callSign: target.callSign || (searchBy === "callsign" ? ident : null),
       airline: target.airline?.name || null,
       status: target.status || "Scheduled",
       aircraftType: target.aircraft?.model || null,
@@ -127,6 +142,7 @@ function chooseFlight(flights, ident, date) {
 
 function flightScore(flight, wanted, date) {
   let score = normalizeLoose(flight.number) === wanted ? 10 : 0;
+  if (normalizeLoose(flight.callSign) === wanted) score += 10;
   if (flight.codeshareStatus === "IsOperator") score += 3;
   if (flight.departure?.scheduledTime?.local?.slice(0, 10) === date) score += 2;
   if (flight.departure?.airport?.location && flight.arrival?.airport?.location) score += 1;

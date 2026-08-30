@@ -1,4 +1,4 @@
-const CACHE_NAME = "airtrace-v20";
+const CACHE_NAME = "airtrace-v21";
 const MAP_CACHE = "airtrace-map-v1";
 const APP_FILES = ["./", "./index.html", "./styles.css", "./config.js", "./app.js", "./manifest.webmanifest", "./vendor/maplibre-gl.js", "./vendor/maplibre-gl.css", "./vendor/maplibre-LICENSE.txt"];
 
