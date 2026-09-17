@@ -200,6 +200,23 @@
       font-variant-numeric: tabular-nums;
       letter-spacing: .03em;
     }
+    .remaining-value-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: flex-end;
+      gap: 12px;
+    }
+    .remaining-value-row .distance-remaining {
+      margin: 0;
+      padding: 5px 9px;
+      border: 1px solid rgba(16, 44, 60, .14);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, .78);
+      color: #102c3c;
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
     .metrics { grid-template-columns: 1.25fr repeat(4, minmax(0, 1fr)) !important; }
     .coordinates-value {
       display: flex;
@@ -330,6 +347,7 @@
         max-width: 100%;
         overflow-wrap: anywhere;
       }
+      .remaining-value-row { justify-content: flex-start; flex-wrap: wrap; }
       .route-meta span { max-width: 100%; }
       .map {
         height: 42svh;
@@ -489,7 +507,10 @@
 
         <div class="remaining">
           <span id="phaseLabel">TIME REMAINING</span>
-          <strong id="remainingTime">—</strong>
+          <div class="remaining-value-row">
+            <strong id="remainingTime">—</strong>
+            <small class="distance-remaining" id="distanceRemaining">— km remaining</small>
+          </div>
           <small id="arrivalTime"></small>
           <small class="live-clock" id="liveClock" aria-label="Current device time"></small>
         </div>
@@ -589,7 +610,6 @@
             <i id="progressBar"></i>
           </div>
 
-          <small class="distance-remaining" id="distanceRemaining">— km remaining</small>
           <small id="phaseDetail"></small>
         </article>
 
@@ -2004,7 +2024,7 @@ window.addEventListener("offline", setNetworkState);
 setDefaultDate();
 setNetworkState();
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("./sw.js?v=23").then(registration => {
+  navigator.serviceWorker.register("./sw.js?v=24").then(registration => {
     registration.update().catch(() => {});
   }).catch(() => {});
 }

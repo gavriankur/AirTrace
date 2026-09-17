@@ -4,6 +4,10 @@ Airtrace prepares a flight while the user is online, then estimates the aircraft
 
 This is an **estimated journey**, not live aircraft tracking.
 
+## v24 distance beside time remaining
+
+V24 moves the continuously updated kilometres-remaining figure into the primary flight-status area beside the time remaining. On narrow phone screens the two values wrap cleanly while staying grouped together.
+
 ## v23 direction, distance, location and turbulence outlook
 
 V23 makes the aircraft's direction explicit: the position card leads with wording such as **Travelling South-East**, followed by the true route heading in degrees and the latitude/longitude coordinates. The timeline aircraft always points right to represent departure-to-arrival progress, while the aircraft drawn on the map still follows the route's geographic bearing.
