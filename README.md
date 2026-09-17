@@ -4,6 +4,16 @@ Airtrace prepares a flight while the user is online, then estimates the aircraft
 
 This is an **estimated journey**, not live aircraft tracking.
 
+## v23 direction, distance, location and turbulence outlook
+
+V23 makes the aircraft's direction explicit: the position card leads with wording such as **Travelling South-East**, followed by the true route heading in degrees and the latitude/longitude coordinates. The timeline aircraft always points right to represent departure-to-arrival progress, while the aircraft drawn on the map still follows the route's geographic bearing.
+
+The journey panel now shows approximate kilometres remaining. The **Currently flying over** field can identify supported seas, gulfs and oceans from the cached map surface and saved coordinates, including the Bay of Bengal, before falling back to a nearby cached city/town or conservative route wording.
+
+Phone-location errors now reset the active location watch and offer a clear retry action instead of incorrectly displaying **Stop phone location**. The flight header suppresses an unhelpful provider status of **Unknown**.
+
+When a flight is prepared close to departure, the Worker checks published NOAA Aviation Weather Center turbulence SIGMET advisories against the estimated route, altitude and flight window. The result is saved with the journey for offline viewing. It is only a significant-weather advisory and cannot predict every instance of turbulence or guarantee a smooth flight.
+
 ## v21 identifier lookup
 
 AirTrace accepts both passenger flight numbers such as `6E5184` and operational ATC callsigns such as `IGO376E`. It first checks the value as a flight number, then automatically retries it as a callsign when no numbered flight is found. A callsign result is saved using the resolved passenger flight number so subsequent live-detail refreshes remain stable.

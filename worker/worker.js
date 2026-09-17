@@ -1,4 +1,5 @@
 const AERODATABOX_BASE = "https://aerodatabox.p.rapidapi.com";
+const AVIATION_WEATHER_BASE = "https://aviationweather.gov/api/data";
 
 export default {
   async fetch(request, env) {
@@ -70,6 +71,16 @@ async function providerGet(path, apiKey, options = {}) {
   return response.json();
 }
 
+async function aviationWeatherGet(path) {
+  const response = await fetch(`${AVIATION_WEATHER_BASE}${path}`, {
+    headers: { "Accept": "application/json", "User-Agent": "AirTrace/23 contact: gavriankur.github.io/AirTrace" }
+  });
+  if (response.status === 204) return [];
+  if (!response.ok) throw new Error(`Aviation weather service returned ${response.status}`);
+  const body = await response.json();
+  return Array.isArray(body) ? body : [];
+}
+
 async function prepareJourney(ident, date, apiKey) {
   const query = `dateLocalRole=Departure&withAircraftImage=false&withLocation=true&withFlightPlan=false`;
   const numberPath = `/flights/number/${encodeURIComponent(ident)}/${date}?${query}`;
@@ -94,11 +105,14 @@ async function prepareJourney(ident, date, apiKey) {
   if (!departureUtc || !arrivalUtc || Date.parse(arrivalUtc) <= Date.parse(departureUtc)) throw new HttpError(502, "The provider returned incomplete departure or arrival times.");
   const greatCircleDistanceKm = routeDistanceKm(origin, destination);
   const estimatedAirborneMinutes = estimateAirborneMinutes(greatCircleDistanceKm, target.aircraft?.model);
+  const routePoints = greatCircleRoute(origin, destination, estimatedAirborneMinutes);
+  const turbulenceOutlook = await prepareTurbulenceOutlook(routePoints, departureUtc, arrivalUtc);
 
   return {
-    schemaVersion: 8,
+    schemaVersion: 9,
     preparedAt: new Date().toISOString(),
     provider: "AeroDataBox",
+    turbulenceOutlook,
     lookup: { flight: target.number || ident, entered: ident, searchBy, date },
     flight: {
       ident: target.number || ident,
@@ -130,9 +144,101 @@ async function prepareJourney(ident, date, apiKey) {
       source: "distance-timed-estimate",
       sampleCount: 0,
       confidence: "Low",
-      points: greatCircleRoute(origin, destination, estimatedAirborneMinutes)
+      points: routePoints
     }
   };
+}
+
+async function prepareTurbulenceOutlook(routePoints, departureUtc, arrivalUtc) {
+  const checkedAt = new Date().toISOString();
+  const departureMs = Date.parse(departureUtc);
+  const arrivalMs = Date.parse(arrivalUtc);
+  if (!Number.isFinite(departureMs) || !Number.isFinite(arrivalMs)) {
+    return { status: "unavailable", checkedAt, detail: "Flight timing was unavailable for the turbulence check." };
+  }
+  if (departureMs > Date.now() + 12 * 3600000) {
+    return { status: "unavailable", checkedAt, detail: "Check again closer to departure; operational turbulence advisories are short-range." };
+  }
+
+  const results = await Promise.allSettled([
+    aviationWeatherGet("/isigmet?hazard=turb&format=json"),
+    aviationWeatherGet("/airsigmet?hazard=turb&format=json")
+  ]);
+  const successful = results.filter(result => result.status === "fulfilled");
+  if (!successful.length) {
+    return { status: "unavailable", checkedAt, detail: "Published aviation advisories could not be reached during preparation." };
+  }
+
+  const advisories = successful.flatMap(result => result.value);
+  const matching = advisories.filter(advisory => {
+    const validFrom = advisoryTimeMs(advisory.validTimeFrom);
+    const validTo = advisoryTimeMs(advisory.validTimeTo);
+    if (validFrom && validTo && (validTo < departureMs - 3600000 || validFrom > arrivalMs + 3600000)) return false;
+    const polygon = Array.isArray(advisory.coords) ? advisory.coords : [];
+    if (polygon.length < 3) return false;
+    const baseFt = advisoryBaseFt(advisory);
+    const topFt = advisoryTopFt(advisory);
+    return routePoints.some(point => point.altitudeFt + 3000 >= baseFt
+      && point.altitudeFt - 3000 <= topFt
+      && pointInPolygon(point, polygon));
+  }).slice(0, 4).map(advisory => ({
+    severity: String(advisory.qualifier || advisory.severity || "Significant turbulence"),
+    region: advisory.firName || advisory.icaoId || "Route area",
+    baseFt: advisoryBaseFt(advisory),
+    topFt: advisoryTopFt(advisory),
+    validFromUtc: isoFromAdvisoryTime(advisory.validTimeFrom),
+    validToUtc: isoFromAdvisoryTime(advisory.validTimeTo),
+    seriesId: advisory.seriesId || null
+  }));
+
+  return {
+    status: matching.length ? "advisory" : "none",
+    checkedAt,
+    source: "NOAA Aviation Weather Center SIGMET",
+    advisories: matching,
+    detail: matching.length
+      ? "A published significant-turbulence advisory intersects the estimated route and altitude."
+      : "No significant published turbulence advisory intersected the estimated route at preparation time."
+  };
+}
+
+function advisoryTimeMs(value) {
+  if (value === null || value === undefined || value === "") return null;
+  if (Number.isFinite(Number(value))) return Number(value) * 1000;
+  const parsed = Date.parse(value || "");
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function isoFromAdvisoryTime(value) {
+  const timestamp = advisoryTimeMs(value);
+  return timestamp ? new Date(timestamp).toISOString() : null;
+}
+
+function advisoryBaseFt(advisory) {
+  const value = Number(advisory.base ?? advisory.altitudeLow1 ?? advisory.altitudeLow2 ?? 0);
+  return Number.isFinite(value) ? Math.max(0, value) : 0;
+}
+
+function advisoryTopFt(advisory) {
+  const value = Number(advisory.top ?? advisory.altitudeHi1 ?? advisory.altitudeHi2 ?? 60000);
+  return Number.isFinite(value) ? Math.max(0, value) : 60000;
+}
+
+function pointInPolygon(point, polygon) {
+  let inside = false;
+  for (let index = 0, previous = polygon.length - 1; index < polygon.length; previous = index++) {
+    const a = polygon[index];
+    const b = polygon[previous];
+    const ax = Number(a.lon);
+    const ay = Number(a.lat);
+    const bx = Number(b.lon);
+    const by = Number(b.lat);
+    if (![ax, ay, bx, by].every(Number.isFinite)) continue;
+    const crosses = (ay > point.lat) !== (by > point.lat)
+      && point.lon < (bx - ax) * (point.lat - ay) / (by - ay || Number.EPSILON) + ax;
+    if (crosses) inside = !inside;
+  }
+  return inside;
 }
 
 function chooseFlight(flights, ident, date) {
