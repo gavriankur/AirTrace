@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#102c3c">
+  <title>AirTrace Diagnostics Admin</title>
+  <style>
+    :root { color-scheme: light; --navy:#102c3c; --orange:#ff6b2c; --muted:#71838d; --line:#d9e0e2; }
+    * { box-sizing: border-box; }
+    body { margin:0; background:#f8f5ed; color:var(--navy); font:15px/1.45 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    header, main { width:min(1120px,calc(100% - 28px)); margin:auto; }
+    header { padding:26px 0 18px; display:flex; align-items:center; justify-content:space-between; gap:20px; border-bottom:1px solid var(--line); }
+    h1 { margin:0; font:600 clamp(26px,4vw,42px)/1 Georgia,serif; }
+    header a { color:var(--navy); font-weight:800; }
+    main { padding:26px 0 50px; }
+    .card { padding:20px; border:1px solid var(--line); border-radius:18px; background:rgba(255,255,255,.88); box-shadow:0 10px 30px rgba(16,44,60,.06); }
+    .auth { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; }
+    label { display:block; color:var(--muted); font-size:11px; font-weight:850; letter-spacing:.12em; }
+    input { width:100%; min-height:48px; margin-top:6px; padding:10px 13px; border:1px solid var(--line); border-radius:12px; background:#fff; font:16px inherit; }
+    button { min-height:48px; padding:10px 17px; border:0; border-radius:999px; background:var(--navy); color:#fff; font:inherit; font-weight:850; cursor:pointer; }
+    button.secondary { border:1px solid var(--line); background:#fff; color:var(--navy); }
+    #status { min-height:24px; margin:12px 0 0; color:var(--muted); }
+    .workspace { display:grid; grid-template-columns:minmax(0,1fr) minmax(340px,.9fr); gap:18px; margin-top:18px; }
+    .table-wrap { overflow:auto; }
+    table { width:100%; border-collapse:collapse; }
+    th,td { padding:11px 9px; border-bottom:1px solid var(--line); text-align:left; white-space:nowrap; }
+    th { color:var(--muted); font-size:10px; letter-spacing:.1em; }
+    tbody tr { cursor:pointer; }
+    tbody tr:hover { background:#fff8f3; }
+    pre { max-height:65vh; overflow:auto; margin:12px 0 0; padding:14px; border-radius:12px; background:#0c2532; color:#eaf4f6; font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; white-space:pre-wrap; overflow-wrap:anywhere; }
+    .detail-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .detail-head h2 { margin:0; font-size:18px; }
+    .hidden { display:none; }
+    @media(max-width:780px){ .workspace{grid-template-columns:1fr}.auth{grid-template-columns:1fr}.auth button{width:100%} }
+  </style>
+</head>
+<body>
+  <header><h1>AirTrace diagnostics</h1><a href="./">Return to AirTrace</a></header>
+  <main>
+    <section class="card">
+      <div class="auth">
+        <label>ADMIN TOKEN<input id="token" type="password" autocomplete="current-password" placeholder="Enter the Cloudflare ADMIN_TOKEN"></label>
+        <button id="load" type="button">Load reports</button>
+      </div>
+      <p id="status">Reports are retained for seven days. The token stays in this browser tab only.</p>
+    </section>
+    <div class="workspace">
+      <section class="card table-wrap">
+        <table>
+          <thead><tr><th>Received</th><th>Flight</th><th>Route</th><th>Version</th><th>Sensor</th><th>Events</th></tr></thead>
+          <tbody id="reports"><tr><td colspan="6">Enter the administrator token to load reports.</td></tr></tbody>
+        </table>
+      </section>
+      <section class="card hidden" id="detailCard">
+        <div class="detail-head"><h2>Diagnostic report</h2><button class="secondary" id="download" type="button">Download</button></div>
+        <pre id="detail"></pre>
+      </section>
+    </div>
+  </main>
+  <script>
+    const API_BASE = "https://airtrace-api.gavriankur.workers.dev";
+    const $ = id => document.getElementById(id);
+    let currentReport = null;
+    const headers = () => ({ Authorization: `Bearer ${$("token").value.trim()}` });
+    const showStatus = text => { $("status").textContent = text; };
+
+    async function loadReports() {
+      if (!$("token").value.trim()) return showStatus("Enter the ADMIN_TOKEN first.");
+      $("load").disabled = true;
+      showStatus("Loading reports…");
+      try {
+        const response = await fetch(`${API_BASE}/diagnostics`, { headers: headers() });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(body.error || `Diagnostic service returned ${response.status}`);
+        const rows = body.reports || [];
+        $("reports").innerHTML = rows.length ? rows.map(report => `
+          <tr data-id="${report.reportId}">
+            <td>${new Date(report.receivedAt).toLocaleString()}</td>
+            <td>${escapeHtml(report.flight || "—")}</td>
+            <td>${escapeHtml(report.route || "—")}</td>
+            <td>v${escapeHtml(report.appVersion || "?")}</td>
+            <td>${escapeHtml(report.sensorStatus || "—")}</td>
+            <td>${Number(report.eventCount || 0)}</td>
+          </tr>`).join("") : '<tr><td colspan="6">No diagnostic reports have been submitted.</td></tr>';
+        $("reports").querySelectorAll("tr[data-id]").forEach(row => row.addEventListener("click", () => loadReport(row.dataset.id)));
+        showStatus(`${rows.length} report${rows.length === 1 ? "" : "s"} available.`);
+      } catch (error) {
+        showStatus(error.message || "Reports could not be loaded.");
+      } finally { $("load").disabled = false; }
+    }
+
+    async function loadReport(id) {
+      showStatus(`Loading ${id}…`);
+      try {
+        const response = await fetch(`${API_BASE}/diagnostics/${encodeURIComponent(id)}`, { headers: headers() });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(body.error || `Diagnostic service returned ${response.status}`);
+        currentReport = body;
+        $("detail").textContent = JSON.stringify(body, null, 2);
+        $("detailCard").classList.remove("hidden");
+        showStatus(`Opened report ${id}.`);
+      } catch (error) { showStatus(error.message || "Report could not be opened."); }
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, character => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" })[character]);
+    }
+
+    function downloadCurrent() {
+      if (!currentReport) return;
+      const url = URL.createObjectURL(new Blob([JSON.stringify(currentReport, null, 2)], { type:"application/json" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `airtrace-report-${currentReport.reportId}.json`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    $("load").addEventListener("click", loadReports);
+    $("token").addEventListener("keydown", event => { if (event.key === "Enter") loadReports(); });
+    $("download").addEventListener("click", downloadCurrent);
+  </script>
+</body>
+</html>

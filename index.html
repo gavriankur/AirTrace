@@ -85,6 +85,50 @@
     }
     .turbulence-panel.advisory .turbulence-badge { color: #7a2d0d; background: #fff0e8; }
     .distance-remaining { color: #102c3c !important; font-weight: 800; }
+    .diagnostics-panel {
+      width: min(1080px, 100%);
+      margin: 22px auto 0;
+      padding: 0;
+      border: 1px solid rgba(16, 44, 60, .16);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, .82);
+      color: #102c3c;
+    }
+    .diagnostics-panel summary {
+      padding: 16px 20px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 850;
+      letter-spacing: .04em;
+    }
+    .diagnostics-content { padding: 0 20px 20px; }
+    .diagnostics-content p,
+    .diagnostics-content small { color: #71838d; line-height: 1.5; }
+    .diagnostics-content small { display: block; margin-top: 9px; }
+    .diagnostics-option {
+      display: flex;
+      align-items: flex-start;
+      gap: 9px;
+      margin: 14px 0;
+      color: #102c3c;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .diagnostics-option input { width: 18px; height: 18px; flex: 0 0 auto; }
+    .diagnostics-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .diagnostics-actions button {
+      min-height: 42px;
+      padding: 9px 14px;
+      border: 1px solid rgba(16, 44, 60, .18);
+      border-radius: 999px;
+      background: #fff;
+      color: #102c3c;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .diagnostics-actions .diagnostics-primary { background: #102c3c; color: #fff; }
     .sensor-panel {
       margin-top: 18px;
       padding: 18px 22px;
@@ -309,6 +353,7 @@
       .sensor-panel,
       .milestone-panel,
       .turbulence-panel,
+      .diagnostics-panel,
       .timeline {
         width: 100%;
         min-width: 0;
@@ -368,6 +413,9 @@
       .sensor-panel { grid-template-columns: 1fr; padding: 15px; }
       .turbulence-panel { grid-template-columns: 1fr; padding: 15px; }
       .turbulence-badge { justify-self: start; }
+      .diagnostics-panel summary { padding: 15px; }
+      .diagnostics-content { padding: 0 15px 15px; }
+      .diagnostics-actions button { flex: 1 1 145px; }
       .sensor-actions { justify-content: flex-start; }
       .sensor-actions button { flex: 1 1 145px; }
       .milestone-panel { padding: 15px; }
@@ -696,6 +744,24 @@
         holding patterns, weather avoidance, or air-traffic-control changes.
       </p>
     </section>
+
+    <details class="diagnostics-panel" id="diagnosticsPanel">
+      <summary>Diagnostics &amp; troubleshooting</summary>
+      <div class="diagnostics-content">
+        <p>AirTrace keeps a seven-day diagnostic log on this device. Nothing is sent automatically.</p>
+        <label class="diagnostics-option">
+          <input id="includePrecisePosition" type="checkbox">
+          <span>Include the current precise position in this report</span>
+        </label>
+        <div class="diagnostics-actions">
+          <button class="diagnostics-primary" id="sendDiagnostics" type="button">Send to AirTrace</button>
+          <button id="shareDiagnostics" type="button">Share report</button>
+          <button id="downloadDiagnostics" type="button">Download JSON</button>
+          <button id="clearDiagnostics" type="button">Clear logs</button>
+        </div>
+        <small id="diagnosticsStatus">Preparing diagnostics…</small>
+      </div>
+    </details>
   </main>
 
   <script src="./vendor/maplibre-gl.js?v=5.19.0"></script>
@@ -706,8 +772,186 @@
   </script>
   <script>
 const STORAGE_KEY = "airtrace.preparedJourney.v2";
+const APP_VERSION = "25";
+const DIAGNOSTIC_LOG_KEY = "airtrace.diagnostics.v1";
+const DIAGNOSTIC_INSTALL_KEY = "airtrace.installationId.v1";
+const DIAGNOSTIC_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+const DIAGNOSTIC_MAX_EVENTS = 300;
 const config = window.AIRTRACE_CONFIG || {};
 const $ = id => document.getElementById(id);
+
+const diagnosticLastValues = new Map();
+
+function safeDiagnosticText(value, limit = 500) {
+  return String(value ?? "").replace(/[\r\n]+/g, " ").slice(0, limit);
+}
+
+function diagnosticInstallationId() {
+  let id = localStorage.getItem(DIAGNOSTIC_INSTALL_KEY);
+  if (!id) {
+    id = globalThis.crypto?.randomUUID?.() || `airtrace-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    localStorage.setItem(DIAGNOSTIC_INSTALL_KEY, id);
+  }
+  return id;
+}
+
+function readDiagnosticEvents() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(DIAGNOSTIC_LOG_KEY) || "[]");
+    const cutoff = Date.now() - DIAGNOSTIC_RETENTION_MS;
+    return (Array.isArray(parsed) ? parsed : []).filter(event => Date.parse(event.at) >= cutoff).slice(-DIAGNOSTIC_MAX_EVENTS);
+  } catch (_) {
+    return [];
+  }
+}
+
+function updateDiagnosticsStatus(message = "") {
+  const element = $("diagnosticsStatus");
+  if (!element) return;
+  const count = readDiagnosticEvents().length;
+  element.textContent = message || `${count} event${count === 1 ? "" : "s"} stored locally · automatically removed after seven days · AirTrace v${APP_VERSION}`;
+}
+
+function logDiagnostic(type, details = {}) {
+  try {
+    const events = readDiagnosticEvents();
+    events.push({
+      at: new Date().toISOString(),
+      type: safeDiagnosticText(type, 80),
+      details
+    });
+    localStorage.setItem(DIAGNOSTIC_LOG_KEY, JSON.stringify(events.slice(-DIAGNOSTIC_MAX_EVENTS)));
+    updateDiagnosticsStatus();
+  } catch (_) {}
+}
+
+function logDiagnosticChange(key, value, type, details = {}) {
+  const serialized = JSON.stringify(value);
+  if (diagnosticLastValues.get(key) === serialized) return;
+  diagnosticLastValues.set(key, serialized);
+  logDiagnostic(type, details);
+}
+
+function currentDiagnosticPosition() {
+  if (!journey) return null;
+  if (sensorState.status === "locked" && sensorState.fix) return { source: "phone", lat: sensorState.fix.lat, lon: sensorState.fix.lon };
+  const live = providerLiveLocation();
+  if (live) return { source: "provider", lat: live.lat, lon: live.lon };
+  const point = interpolateRoute(journey.route.points, effectiveProgress());
+  return { source: "simulation", lat: point.lat, lon: point.lon };
+}
+
+function buildDiagnosticReport(includePrecisePosition = false) {
+  const tracking = journey?.tracking || {};
+  const report = {
+    reportSchema: 1,
+    appVersion: APP_VERSION,
+    generatedAt: new Date().toISOString(),
+    installationId: diagnosticInstallationId(),
+    environment: {
+      userAgent: safeDiagnosticText(navigator.userAgent, 300),
+      language: navigator.language || null,
+      online: navigator.onLine,
+      standalone: Boolean(window.matchMedia?.("(display-mode: standalone)")?.matches || navigator.standalone),
+      serviceWorkerControlled: Boolean(navigator.serviceWorker?.controller)
+    },
+    journey: journey ? {
+      flight: journey.flight?.ident || null,
+      route: `${journey.flight?.origin?.code || "?"}-${journey.flight?.destination?.code || "?"}`,
+      preparedAt: journey.preparedAt || null,
+      providerSchema: journey.schemaVersion || null,
+      progressPercent: Math.round(effectiveProgress() * 100),
+      sensorStatus: sensorState.status,
+      mapReady,
+      takeoffSource: tracking.takeoffSource || null,
+      landingSource: tracking.landingSource || null
+    } : null,
+    precisePositionIncluded: Boolean(includePrecisePosition),
+    events: readDiagnosticEvents()
+  };
+  if (includePrecisePosition) report.currentPosition = currentDiagnosticPosition();
+  return report;
+}
+
+function diagnosticFilename() {
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  return `airtrace-diagnostics-v${APP_VERSION}-${stamp}.json`;
+}
+
+function reportFile(report) {
+  return new File([JSON.stringify(report, null, 2)], diagnosticFilename(), { type: "application/json" });
+}
+
+async function sendDiagnosticReport() {
+  const apiBase = (config.API_BASE_URL || "").replace(/\/$/, "");
+  if (!navigator.onLine) {
+    updateDiagnosticsStatus("You are offline. The report remains on this phone; send it after reconnecting.");
+    return;
+  }
+  if (!apiBase) {
+    updateDiagnosticsStatus("The diagnostic service is not configured. Download or share the report instead.");
+    return;
+  }
+  const button = $("sendDiagnostics");
+  button.disabled = true;
+  button.textContent = "Sending…";
+  try {
+    logDiagnostic("diagnostic_send_requested");
+    const report = buildDiagnosticReport($("includePrecisePosition").checked);
+    const response = await fetch(`${apiBase}/diagnostics`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(report)
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body.error || `Diagnostic service returned ${response.status}`);
+    logDiagnostic("diagnostic_send_succeeded", { reportId: body.reportId });
+    updateDiagnosticsStatus(`Sent successfully · report ID ${body.reportId}`);
+  } catch (error) {
+    logDiagnostic("diagnostic_send_failed", { message: safeDiagnosticText(error.message) });
+    updateDiagnosticsStatus(`${error.message || "The report could not be sent."} You can still share or download it.`);
+  } finally {
+    button.disabled = false;
+    button.textContent = "Send to AirTrace";
+  }
+}
+
+async function shareDiagnosticReport() {
+  logDiagnostic("diagnostic_share_requested");
+  const report = buildDiagnosticReport($("includePrecisePosition").checked);
+  try {
+    const file = reportFile(report);
+    if (!navigator.share || (navigator.canShare && !navigator.canShare({ files: [file] }))) {
+      downloadDiagnosticReport();
+      updateDiagnosticsStatus("File sharing is unavailable in this browser, so the JSON report was downloaded.");
+      return;
+    }
+    await navigator.share({ title: "AirTrace diagnostic report", text: "AirTrace diagnostic report", files: [file] });
+    logDiagnostic("diagnostic_share_completed");
+  } catch (error) {
+    if (error?.name !== "AbortError") updateDiagnosticsStatus(`The report could not be shared: ${safeDiagnosticText(error.message)}`);
+  }
+}
+
+function downloadDiagnosticReport() {
+  logDiagnostic("diagnostic_downloaded");
+  const report = buildDiagnosticReport($("includePrecisePosition").checked);
+  const url = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2)], { type: "application/json" }));
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = diagnosticFilename();
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  updateDiagnosticsStatus("Diagnostic JSON downloaded. No data was sent automatically.");
+}
+
+function clearDiagnosticEvents() {
+  localStorage.removeItem(DIAGNOSTIC_LOG_KEY);
+  diagnosticLastValues.clear();
+  updateDiagnosticsStatus("Diagnostic events cleared from this device.");
+}
 
 let journey = null;
 let previewProgress = null;
@@ -765,6 +1009,7 @@ function setDefaultDate() {
 
 function setNetworkState() {
   const online = navigator.onLine;
+  logDiagnosticChange("network", online, "network_state", { online });
   document.body.classList.toggle("offline", !online);
   $("network").classList.toggle("offline", !online);
   $("network").querySelector("b").textContent = online ? "Online — ready to prepare" : "Offline — using saved data";
@@ -998,12 +1243,16 @@ function initializeMap() {
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
   map.on("load", () => {
     mapReady = true;
+    logDiagnostic("map_loaded");
     $("mapLoading").classList.add("ready");
     updateMapRoute();
   });
   map.on("error", event => {
     if (!mapReady && !navigator.onLine) $("mapLoading").textContent = "Offline map detail was not cached — route data is still saved";
     if (event?.error) console.warn("Map resource unavailable", event.error.message);
+    logDiagnosticChange("map_error", event?.error?.message || "unknown", "map_error", {
+      message: safeDiagnosticText(event?.error?.message || "Map resource unavailable")
+    });
   });
 }
 
@@ -1304,6 +1553,7 @@ function recordTakeoff(source = "manual") {
   tracking.lastConfirmedProgress = 0;
   tracking.lastConfirmedAt = Date.now();
   tracking.takeoffSource = source;
+  logDiagnostic("takeoff_recorded", { source });
   saveJourney();
   renderTracker();
 }
@@ -1314,6 +1564,7 @@ function recordLanding(source = "manual") {
   tracking.lastConfirmedProgress = 1;
   tracking.lastConfirmedAt = Date.now();
   tracking.landingSource = source;
+  logDiagnostic("landing_recorded", { source });
   saveJourney();
   renderTracker();
 }
@@ -1322,6 +1573,7 @@ function recordDoorClosed() {
   const tracking = trackingState();
   tracking.doorClosedMs = Date.now();
   tracking.doorClosedSource = "manual";
+  logDiagnostic("doors_closed_recorded", { source: "manual" });
   saveJourney();
   renderTracker();
 }
@@ -1331,6 +1583,7 @@ function recordDoorOpened() {
   const now = Date.now();
   tracking.doorOpenedMs = now;
   tracking.doorOpenedSource = "manual";
+  logDiagnostic("doors_opened_recorded", { source: "manual" });
   if (!tracking.actualLandingMs) {
     const providerLanding = optionalTimestamp(journey.flight.arrivalRunwayUtc);
     tracking.actualLandingMs = providerLanding && providerLanding <= now ? providerLanding : now;
@@ -1441,11 +1694,25 @@ function handleSensorPosition(position) {
   sensorState.fix = fix;
   if (!usable) {
     sensorState.status = "weak";
+    logDiagnosticChange("sensor_status", "weak", "sensor_status", {
+      status: "weak",
+      accuracyBandMetres: Number.isFinite(fix.accuracy) ? Math.ceil(fix.accuracy / 1000) * 1000 : null,
+      altitudeAvailable: Number.isFinite(fix.altitude),
+      speedAvailable: Number.isFinite(speed)
+    });
     updateSensorPanel();
     return;
   }
 
   sensorState.status = "locked";
+  logDiagnosticChange("sensor_status", "locked", "sensor_status", {
+    status: "locked",
+    accuracyBandMetres: Number.isFinite(fix.accuracy) ? Math.ceil(fix.accuracy / 100) * 100 : null,
+    altitudeAvailable: Number.isFinite(fix.altitude),
+    altitudeAccuracyAvailable: Number.isFinite(fix.altitudeAccuracy),
+    speedAvailable: Number.isFinite(speed),
+    headingAvailable: Number.isFinite(fix.heading)
+  });
   sensorState.routeProgress = nearest.progress;
   const tracking = trackingState();
   const originDistance = distanceMetres(fix, journey.flight.origin);
@@ -1474,6 +1741,11 @@ function handleSensorPosition(position) {
 
 function handleSensorError(error) {
   sensorState.status = error?.code === 1 ? "denied" : "unavailable";
+  logDiagnostic("sensor_error", {
+    status: sensorState.status,
+    code: Number.isFinite(Number(error?.code)) ? Number(error.code) : null,
+    message: safeDiagnosticText(error?.message || "Location request failed")
+  });
   if (sensorWatchId !== null && navigator.geolocation) navigator.geolocation.clearWatch(sensorWatchId);
   sensorWatchId = null;
   updateSensorPanel();
@@ -1481,6 +1753,7 @@ function handleSensorError(error) {
 
 function startSensorAssist() {
   if (!navigator.geolocation || sensorWatchId !== null) return;
+  logDiagnostic("sensor_requested");
   sensorState.enabled = true;
   sensorState.status = "waiting";
   updateSensorPanel();
@@ -1496,6 +1769,7 @@ function stopSensorAssist() {
   sensorWatchId = null;
   sensorState.enabled = false;
   sensorState.status = "off";
+  logDiagnostic("sensor_stopped");
   updateSensorPanel();
 }
 
@@ -1751,6 +2025,14 @@ function renderTracker() {
   $("previewSlider").value = Math.round(progress * 100);
   $("previewSlider").style.setProperty("--slider-progress", `${progress * 100}%`);
   const displayedPosition = phonePosition ? sensorState.fix : liveProvider || point;
+  const positionSource = phonePosition ? "phone" : liveProvider ? "provider" : "simulation";
+  logDiagnosticChange("position_source", positionSource, "position_source", { source: positionSource });
+  const progressBucket = Math.min(100, Math.floor(progress * 10) * 10);
+  logDiagnosticChange("progress_bucket", progressBucket, "progress_checkpoint", {
+    percent: progressBucket,
+    source: positionSource,
+    sensorStatus: sensorState.status
+  });
   updateDistanceRemaining(displayedPosition, progress);
   $("coordinatesLabel").textContent = phonePosition
     ? "PHONE POSITION & TRAVEL DIRECTION"
@@ -1830,6 +2112,12 @@ function renderTracker() {
 
 function openJourney(data) {
   journey = data;
+  logDiagnostic("journey_opened", {
+    flight: safeDiagnosticText(data.flight?.ident, 20),
+    route: `${safeDiagnosticText(data.flight?.origin?.code, 8)}-${safeDiagnosticText(data.flight?.destination?.code, 8)}`,
+    providerSchema: data.schemaVersion || null,
+    preparedAt: data.preparedAt || null
+  });
   nearbyPlaceCache = null;
   trackingState();
   saveJourney();
@@ -1882,6 +2170,7 @@ async function refreshFlightData(options = {}) {
   const oldText = button.textContent;
   button.disabled = true;
   button.textContent = "Refreshing…";
+  logDiagnostic("flight_refresh_started", { silent: Boolean(options.silent) });
   try {
     const { flight, date } = journey.lookup;
     const response = await fetch(`${apiBase}/prepare?flight=${encodeURIComponent(flight)}&date=${encodeURIComponent(date)}`);
@@ -1891,8 +2180,10 @@ async function refreshFlightData(options = {}) {
     body.tracking = tracking;
     body.liveRefreshedAt = new Date().toISOString();
     lastRefreshAt = Date.now();
+    logDiagnostic("flight_refresh_succeeded", { providerSchema: body.schemaVersion || null });
     openJourney(body);
   } catch (error) {
+    logDiagnostic("flight_refresh_failed", { message: safeDiagnosticText(error.message) });
     if (!options.silent) {
       $("savedStatus").textContent = error.message || "Live details could not be refreshed.";
     }
@@ -1921,6 +2212,7 @@ async function prepareFlight(event) {
 
   const flight = cleanFlightNumber($("flightNumber").value);
   const date = $("flightDate").value;
+  logDiagnostic("flight_prepare_started", { flight: safeDiagnosticText(flight, 20), date });
   const button = $("prepareButton");
   button.disabled = true;
   button.firstChild.textContent = "Preparing route… ";
@@ -1930,9 +2222,11 @@ async function prepareFlight(event) {
     const response = await fetch(`${apiBase}/prepare?flight=${encodeURIComponent(flight)}&date=${encodeURIComponent(date)}`);
     const body = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(body.error || `Flight service returned ${response.status}`);
+    logDiagnostic("flight_prepare_succeeded", { flight: safeDiagnosticText(flight, 20), providerSchema: body.schemaVersion || null });
     previewProgress = null;
     openJourney(body);
   } catch (error) {
+    logDiagnostic("flight_prepare_failed", { flight: safeDiagnosticText(flight, 20), message: safeDiagnosticText(error.message) });
     showMessage(error.message || "The flight could not be prepared.", true);
   } finally {
     button.disabled = false;
@@ -2018,21 +2312,41 @@ $("takeoffButton").addEventListener("click", () => recordTakeoff("manual"));
 $("landedButton").addEventListener("click", () => recordLanding("manual"));
 $("doorOpenedButton").addEventListener("click", recordDoorOpened);
 $("refreshFlight").addEventListener("click", () => refreshFlightData());
+$("sendDiagnostics").addEventListener("click", sendDiagnosticReport);
+$("shareDiagnostics").addEventListener("click", shareDiagnosticReport);
+$("downloadDiagnostics").addEventListener("click", downloadDiagnosticReport);
+$("clearDiagnostics").addEventListener("click", clearDiagnosticEvents);
 window.addEventListener("online", handleOnline);
 window.addEventListener("offline", setNetworkState);
+window.addEventListener("error", event => logDiagnostic("javascript_error", {
+  message: safeDiagnosticText(event.message || event.error?.message || "Unknown JavaScript error"),
+  file: safeDiagnosticText(String(event.filename || "").split("/").pop(), 100),
+  line: event.lineno || null,
+  column: event.colno || null
+}));
+window.addEventListener("unhandledrejection", event => logDiagnostic("unhandled_promise_rejection", {
+  message: safeDiagnosticText(event.reason?.message || event.reason || "Unhandled promise rejection")
+}));
 
 setDefaultDate();
 setNetworkState();
+logDiagnostic("app_started", { version: APP_VERSION, online: navigator.onLine });
+updateDiagnosticsStatus();
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("./sw.js?v=24").then(registration => {
-    registration.update().catch(() => {});
-  }).catch(() => {});
+  navigator.serviceWorker.register("./sw.js?v=25").then(registration => {
+    logDiagnostic("service_worker_registered", { controlled: Boolean(navigator.serviceWorker.controller) });
+    registration.update().catch(error => logDiagnostic("service_worker_update_failed", { message: safeDiagnosticText(error.message) }));
+  }).catch(error => logDiagnostic("service_worker_registration_failed", { message: safeDiagnosticText(error.message) }));
 }
 
 try {
   const savedJourney = JSON.parse(localStorage.getItem(STORAGE_KEY));
-  if (!navigator.onLine && savedJourney?.route?.points?.length) openJourney(savedJourney);
-} catch (_) {
+  if (!navigator.onLine && savedJourney?.route?.points?.length) {
+    logDiagnostic("saved_journey_loaded", { preparedAt: savedJourney.preparedAt || null });
+    openJourney(savedJourney);
+  }
+} catch (error) {
+  logDiagnostic("saved_journey_invalid", { message: safeDiagnosticText(error.message) });
   localStorage.removeItem(STORAGE_KEY);
 }
 

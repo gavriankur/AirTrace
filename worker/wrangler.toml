@@ -6,3 +6,11 @@ compatibility_date = "2026-08-01"
 # Replace this with your exact GitHub Pages origin after publishing.
 # Multiple origins can be comma-separated. Use "*" only for initial testing.
 ALLOWED_ORIGINS = "*"
+
+# Diagnostics setup:
+# 1. Run: npx wrangler kv namespace create AIRTRACE_DIAGNOSTICS
+# 2. Append the binding below with the returned namespace ID.
+# [[kv_namespaces]]
+# binding = "AIRTRACE_DIAGNOSTICS"
+# id = "PASTE_THE_RETURNED_NAMESPACE_ID"
+# 3. Run: npx wrangler secret put ADMIN_TOKEN

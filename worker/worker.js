@@ -6,7 +6,17 @@ export default {
     const url = new URL(request.url);
     const cors = corsHeaders(request, env);
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
-    if (url.pathname === "/health") return json({ ok: true, provider: "AeroDataBox", providerConfigured: Boolean(env.AERODATABOX_RAPIDAPI_KEY) }, 200, cors);
+    if (url.pathname === "/health") return json({
+      ok: true,
+      provider: "AeroDataBox",
+      providerConfigured: Boolean(env.AERODATABOX_RAPIDAPI_KEY),
+      diagnosticsConfigured: Boolean(env.AIRTRACE_DIAGNOSTICS && env.ADMIN_TOKEN)
+    }, 200, cors);
+    if (url.pathname === "/diagnostics" && request.method === "POST") return receiveDiagnosticReport(request, env, cors);
+    if (url.pathname === "/diagnostics" && request.method === "GET") return listDiagnosticReports(request, env, cors);
+    if (url.pathname.startsWith("/diagnostics/") && request.method === "GET") {
+      return getDiagnosticReport(request, env, cors, decodeURIComponent(url.pathname.slice("/diagnostics/".length)));
+    }
     if (url.pathname !== "/prepare" || request.method !== "GET") return json({ error: "Not found" }, 404, cors);
 
     try {
@@ -42,8 +52,8 @@ function corsHeaders(request, env) {
   const permitted = allowed.includes("*") || allowed.includes(origin);
   return {
     "Access-Control-Allow-Origin": permitted ? origin : "null",
-    "Access-Control-Allow-Methods": "GET, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
     "Vary": "Origin",
     "Cache-Control": "no-store"
   };
@@ -51,6 +61,89 @@ function corsHeaders(request, env) {
 
 function json(body, status, headers) {
   return new Response(JSON.stringify(body), { status, headers: { ...headers, "Content-Type": "application/json; charset=utf-8" } });
+}
+
+const DIAGNOSTIC_RETENTION_SECONDS = 7 * 24 * 60 * 60;
+const DIAGNOSTIC_MAX_BYTES = 96 * 1024;
+
+function diagnosticAdminAuthorized(request, env) {
+  const supplied = request.headers.get("Authorization") || "";
+  return Boolean(env.ADMIN_TOKEN) && supplied === `Bearer ${env.ADMIN_TOKEN}`;
+}
+
+function diagnosticStore(env) {
+  if (!env.AIRTRACE_DIAGNOSTICS) throw new HttpError(503, "Diagnostic storage is not configured.");
+  return env.AIRTRACE_DIAGNOSTICS;
+}
+
+async function receiveDiagnosticReport(request, env, cors) {
+  try {
+    const declaredSize = Number(request.headers.get("Content-Length") || 0);
+    if (declaredSize > DIAGNOSTIC_MAX_BYTES) throw new HttpError(413, "Diagnostic report is too large.");
+    const text = await request.text();
+    if (new TextEncoder().encode(text).byteLength > DIAGNOSTIC_MAX_BYTES) throw new HttpError(413, "Diagnostic report is too large.");
+    let report;
+    try { report = JSON.parse(text); } catch (_) { throw new HttpError(400, "Diagnostic report must be valid JSON."); }
+    if (!report || typeof report !== "object" || Number(report.reportSchema) !== 1) throw new HttpError(400, "Unsupported diagnostic report.");
+    if (!Array.isArray(report.events) || report.events.length > 300) throw new HttpError(400, "Diagnostic event list is invalid.");
+
+    const store = diagnosticStore(env);
+    const reportId = crypto.randomUUID();
+    const receivedAt = new Date().toISOString();
+    const stored = {
+      ...report,
+      reportId,
+      receivedAt,
+      installationId: String(report.installationId || "").slice(0, 80),
+      appVersion: String(report.appVersion || "").slice(0, 20)
+    };
+    const metadata = {
+      reportId,
+      receivedAt,
+      installationId: stored.installationId,
+      appVersion: stored.appVersion,
+      flight: String(report.journey?.flight || "").slice(0, 20) || null,
+      route: String(report.journey?.route || "").slice(0, 30) || null,
+      sensorStatus: String(report.journey?.sensorStatus || "").slice(0, 30) || null,
+      eventCount: report.events.length,
+      precisePositionIncluded: Boolean(report.precisePositionIncluded)
+    };
+    await store.put(`diag:${reportId}`, JSON.stringify(stored), {
+      expirationTtl: DIAGNOSTIC_RETENTION_SECONDS,
+      metadata
+    });
+    return json({ ok: true, reportId, receivedAt, expiresInDays: 7 }, 201, cors);
+  } catch (error) {
+    const status = error instanceof HttpError ? error.status : 500;
+    return json({ error: error.message || "The diagnostic report could not be stored." }, status, cors);
+  }
+}
+
+async function listDiagnosticReports(request, env, cors) {
+  try {
+    if (!diagnosticAdminAuthorized(request, env)) throw new HttpError(401, "Administrator authorization required.");
+    const store = diagnosticStore(env);
+    const listing = await store.list({ prefix: "diag:", limit: 100 });
+    const reports = listing.keys.map(key => key.metadata || { reportId: key.name.slice(5) })
+      .sort((a, b) => String(b.receivedAt || "").localeCompare(String(a.receivedAt || "")));
+    return json({ reports, cursor: listing.list_complete ? null : listing.cursor }, 200, cors);
+  } catch (error) {
+    const status = error instanceof HttpError ? error.status : 500;
+    return json({ error: error.message || "Diagnostic reports could not be listed." }, status, cors);
+  }
+}
+
+async function getDiagnosticReport(request, env, cors, reportId) {
+  try {
+    if (!diagnosticAdminAuthorized(request, env)) throw new HttpError(401, "Administrator authorization required.");
+    if (!/^[a-f0-9-]{20,50}$/i.test(reportId)) throw new HttpError(400, "Invalid diagnostic report ID.");
+    const report = await diagnosticStore(env).get(`diag:${reportId}`, "json");
+    if (!report) throw new HttpError(404, "Diagnostic report not found or already expired.");
+    return json(report, 200, cors);
+  } catch (error) {
+    const status = error instanceof HttpError ? error.status : 500;
+    return json({ error: error.message || "Diagnostic report could not be retrieved." }, status, cors);
+  }
 }
 
 async function providerGet(path, apiKey, options = {}) {

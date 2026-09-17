@@ -4,6 +4,39 @@ Airtrace prepares a flight while the user is online, then estimates the aircraft
 
 This is an **estimated journey**, not live aircraft tracking.
 
+## v25 opt-in diagnostics
+
+V25 keeps up to seven days of troubleshooting events locally on each device. It records application version, network changes, lookup/refresh results, service-worker and map errors, sensor permission/status, data-source changes and coarse progress checkpoints. Exact coordinates are not logged by default.
+
+The tester can explicitly send a report to AirTrace, share it through the phone's share sheet, download it as JSON or clear the local log. Selecting **Include the current precise position** adds only the current position to that generated report.
+
+Submitted reports are stored for seven days in a Cloudflare Workers KV namespace. The protected `admin.html` page lists reports only after the administrator enters the private `ADMIN_TOKEN`; the token is not stored in GitHub or embedded in the page.
+
+### Diagnostics storage setup
+
+From the `worker` directory, create a KV namespace:
+
+```bash
+npx wrangler kv namespace create AIRTRACE_DIAGNOSTICS
+```
+
+Add the returned namespace ID to `worker/wrangler.toml`:
+
+```toml
+[[kv_namespaces]]
+binding = "AIRTRACE_DIAGNOSTICS"
+id = "PASTE_THE_RETURNED_NAMESPACE_ID"
+```
+
+Create a strong administrator token and deploy:
+
+```bash
+npx wrangler secret put ADMIN_TOKEN
+npx wrangler deploy
+```
+
+Open `https://gavriankur.github.io/AirTrace/admin.html`, enter the same token and select **Load reports**. Reports expire automatically after seven days.
+
 ## v24 distance beside time remaining
 
 V24 moves the continuously updated kilometres-remaining figure into the primary flight-status area beside the time remaining. On narrow phone screens the two values wrap cleanly while staying grouped together.
