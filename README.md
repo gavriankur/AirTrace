@@ -14,7 +14,11 @@ The tracker can optionally use browser geolocation while the page remains open. 
 
 Manual **We just took off** and **We have landed** controls remain available because GPS reception inside an aircraft is not guaranteed. Sensor readings stay in the browser and are saved only with the journey on that device.
 
-When connectivity returns, **Refresh live details** retrieves revised flight information and an arrival baggage belt when AeroDataBox supplies one. Baggage information cannot be refreshed while fully offline.
+When connectivity returns, **Refresh live details** retrieves revised flight information from AeroDataBox.
+
+## v22 tracker display
+
+V22 adds a live device clock with seconds, an aircraft-shaped timeline control, side-by-side altitude and speed, route-heading compass, and cached-map place labels for nearby cities and towns. During the final estimated 1,000 feet, altitude counts down rapidly to touchdown. Once the calculated landing time passes, the journey is shown as landed and the estimated aircraft is placed at the destination. The baggage-belt panel has been removed, and the offline-map message now explains that only previously viewed tiles and zoom levels are available.
 
 ## v20 live-data safeguards
 

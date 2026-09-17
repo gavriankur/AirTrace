@@ -64,7 +64,6 @@
       gap: 16px;
     }
     .sensor-copy span,
-    .baggage-strip span,
     .milestone-heading span,
     .milestone-card span {
       display: block;
@@ -73,13 +72,10 @@
       font-weight: 800;
       letter-spacing: .14em;
     }
-    .sensor-copy strong,
-    .baggage-strip strong { color: #102c3c; font-size: 19px; }
-    .sensor-copy small,
-    .baggage-strip small { display: block; margin-top: 3px; color: #71838d; }
+    .sensor-copy strong { color: #102c3c; font-size: 19px; }
+    .sensor-copy small { display: block; margin-top: 3px; color: #71838d; }
     .sensor-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
-    .sensor-actions button,
-    .baggage-strip button {
+    .sensor-actions button {
       min-height: 42px;
       padding: 9px 13px;
       border: 1px solid rgba(16, 44, 60, .18);
@@ -92,19 +88,7 @@
       cursor: pointer;
     }
     .sensor-actions .sensor-primary { background: #102c3c; color: #fff; }
-    .sensor-actions button:disabled,
-    .baggage-strip button:disabled { cursor: default; opacity: .55; }
-    .baggage-strip {
-      margin-top: 18px;
-      padding: 18px 22px;
-      border: 1px solid rgba(16, 44, 60, .16);
-      border-radius: 16px;
-      background: rgba(255, 255, 255, .8);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-    }
+    .sensor-actions button:disabled { cursor: default; opacity: .55; }
     .milestone-panel {
       margin-top: 18px;
       padding: 18px 22px;
@@ -174,6 +158,81 @@
     .timeline-time div:last-child { text-align: right; }
     .timeline-time strong { color: #102c3c; font-size: 15px; }
     .timeline-time .current-time strong { color: #ff6b2c; font-size: 18px; }
+    .remaining .live-clock {
+      display: block;
+      margin-top: 7px;
+      color: #102c3c;
+      font-size: 13px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: .03em;
+    }
+    .metrics { grid-template-columns: 1.25fr repeat(4, minmax(0, 1fr)) !important; }
+    .coordinates-value {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .heading-compass {
+      width: 40px;
+      height: 40px;
+      flex: 0 0 40px;
+      display: grid;
+      place-items: center;
+      border: 1px solid rgba(16, 44, 60, .16);
+      border-radius: 50%;
+      color: #ff6b2c;
+      background: #fff8f3;
+    }
+    .heading-compass i {
+      display: block;
+      font-size: 22px;
+      font-style: normal;
+      line-height: 1;
+      transform: rotate(0deg);
+      transition: transform .35s ease;
+    }
+    .metric-speed strong { white-space: nowrap; }
+    #previewSlider {
+      width: 100%;
+      height: 36px;
+      margin-top: 5px;
+      appearance: none;
+      -webkit-appearance: none;
+      background: transparent;
+      cursor: pointer;
+    }
+    #previewSlider::-webkit-slider-runnable-track {
+      height: 3px;
+      border-radius: 3px;
+      background: linear-gradient(90deg, #ff6b2c 0 var(--slider-progress, 0%), #dfe5e6 var(--slider-progress, 0%) 100%);
+    }
+    #previewSlider::-webkit-slider-thumb {
+      width: 38px;
+      height: 38px;
+      margin-top: -18px;
+      border: 3px solid #fff;
+      border-radius: 50%;
+      appearance: none;
+      -webkit-appearance: none;
+      background-color: #ff6b2c;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath fill='white' d='M16 3l3 10 9 4v3l-9-2-1 7 4 3v2l-6-2-6 2v-2l4-3-1-7-9 2v-3l9-4 3-10z'/%3E%3C/svg%3E");
+      background-position: center;
+      background-repeat: no-repeat;
+      background-size: 25px;
+      box-shadow: 0 3px 9px rgba(16, 44, 60, .28);
+    }
+    #previewSlider::-moz-range-track { height: 3px; border-radius: 3px; background: #dfe5e6; }
+    #previewSlider::-moz-range-progress { height: 3px; border-radius: 3px; background: #ff6b2c; }
+    #previewSlider::-moz-range-thumb {
+      width: 34px;
+      height: 34px;
+      border: 3px solid #fff;
+      border-radius: 50%;
+      background: #ff6b2c;
+      box-shadow: 0 3px 9px rgba(16, 44, 60, .28);
+    }
     #mapCanvas .plane-marker {
       display: none !important;
     }
@@ -199,7 +258,6 @@
       .location-strip,
       .sensor-panel,
       .milestone-panel,
-      .baggage-strip,
       .timeline {
         width: 100%;
         min-width: 0;
@@ -262,7 +320,10 @@
       .milestone-heading { align-items: flex-start; flex-direction: column; }
       .milestone-heading small { text-align: left; }
       .milestone-grid { grid-template-columns: 1fr 1fr; }
-      .baggage-strip { align-items: flex-start; flex-direction: column; padding: 15px; }
+      .metrics { grid-template-columns: 1fr 1fr !important; }
+      .metrics .metric-wide { grid-column: 1 / -1; }
+      .metrics .metric-altitude { border-right: 1px solid rgba(16, 44, 60, .16); }
+      .metrics .metric-speed { border-right: 0; }
       .timeline { padding: 14px; }
       #previewSlider { min-height: 32px; }
     }
@@ -394,12 +455,17 @@
           <span id="phaseLabel">TIME REMAINING</span>
           <strong id="remainingTime">—</strong>
           <small id="arrivalTime"></small>
+          <small class="live-clock" id="liveClock" aria-label="Current device time"></small>
         </div>
       </div>
 
       <div class="route-meta">
         <span id="routeSource"></span>
         <span id="savedStatus">Saved for offline use</span>
+
+        <button id="refreshFlight" type="button">
+          ↻ Refresh live details
+        </button>
 
         <button id="changeFlight" type="button">
           ⌂ Track a fresh journey
@@ -473,12 +539,12 @@
         </div>
 
         <div class="offline-map-note" id="offlineMapNote">
-          Map detail is cached from the online view
+          Offline map: only previously viewed tiles are available. Unvisited areas or extra zoom levels may appear blank.
         </div>
       </div>
 
       <div class="metrics">
-        <article>
+        <article class="metric-wide">
           <span>JOURNEY</span>
 
           <strong id="progressText">—</strong>
@@ -490,13 +556,17 @@
           <small id="phaseDetail"></small>
         </article>
 
-        <article>
+        <article class="metric-wide">
           <span id="coordinatesLabel">ESTIMATED COORDINATES</span>
-          <strong id="latitude">—</strong>
+          <div class="coordinates-value">
+            <strong id="latitude">—</strong>
+            <span class="heading-compass" id="headingCompass" aria-label="Aircraft heading"><i>▲</i></span>
+          </div>
           <small id="longitude"></small>
+          <small id="headingDetail">Direction of travel unavailable</small>
         </article>
 
-        <article>
+        <article class="metric-altitude">
           <span id="altitudeLabel">ESTIMATED ALTITUDE</span>
           <strong id="altitude">—</strong>
 
@@ -505,7 +575,13 @@
           </small>
         </article>
 
-        <article>
+        <article class="metric-speed">
+          <span id="speedLabel">ESTIMATED SPEED</span>
+          <strong id="speed">—</strong>
+          <small id="speedDetail">Derived from the route estimate</small>
+        </article>
+
+        <article class="metric-wide">
           <span>ROUTE CONFIDENCE</span>
           <strong id="confidence">—</strong>
           <small id="sampleDetail"></small>
@@ -518,15 +594,6 @@
           <strong id="flyingOver">—</strong>
         </div>
         <small id="flyingOverDetail">Estimated from the simulated route</small>
-      </div>
-
-      <div class="baggage-strip">
-        <div>
-          <span>ARRIVAL BAGGAGE BELT</span>
-          <strong id="baggageBelt">Not announced yet</strong>
-          <small id="baggageDetail">AirTrace will check again when an internet connection returns.</small>
-        </div>
-        <button id="refreshFlight" type="button">Refresh live details</button>
       </div>
 
       <div class="timeline">
@@ -579,6 +646,7 @@ const $ = id => document.getElementById(id);
 let journey = null;
 let previewProgress = null;
 let clockTimer = null;
+let altitudeTimer = null;
 let refreshTimer = null;
 let animationFrame = null;
 let map = null;
@@ -586,6 +654,7 @@ let planeMarker = null;
 let mapReady = false;
 let sensorWatchId = null;
 let lastRefreshAt = 0;
+let nearbyPlaceCache = null;
 const sensorState = {
   enabled: false,
   status: "off",
@@ -642,6 +711,24 @@ function formatClock(iso, timeZone) {
   return new Intl.DateTimeFormat(undefined, {
     hour: "2-digit", minute: "2-digit", timeZone, timeZoneName: "short"
   }).format(new Date(flightTimestamp(iso)));
+}
+
+function formatLiveClock(now = new Date()) {
+  const time = new Intl.DateTimeFormat(undefined, {
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23"
+  }).format(now);
+  const offsetMinutes = -now.getTimezoneOffset();
+  if (offsetMinutes === 0) return `Current time ${time} GMT`;
+  const sign = offsetMinutes >= 0 ? "+" : "−";
+  const absolute = Math.abs(offsetMinutes);
+  const hours = Math.floor(absolute / 60);
+  const minutes = absolute % 60;
+  return `Current time ${time} GMT${sign}${hours}${minutes ? `:${String(minutes).padStart(2, "0")}` : ""}`;
+}
+
+function updateLiveClock() {
+  const element = $("liveClock");
+  if (element) element.textContent = formatLiveClock();
 }
 
 function interpolateRoute(points, progress) {
@@ -865,6 +952,7 @@ function providerLiveLocation() {
     lon: Number(fix.lon),
     altitudeFt: Number.isFinite(Number(fix.altitudeFt)) ? Number(fix.altitudeFt) : null,
     groundSpeedKt: Number.isFinite(Number(fix.groundSpeedKt)) ? Number(fix.groundSpeedKt) : null,
+    trueTrackDeg: Number.isFinite(Number(fix.trueTrackDeg)) ? Number(fix.trueTrackDeg) : null,
     reportedAt
   };
 }
@@ -1010,6 +1098,7 @@ function effectiveProgress() {
   const tracking = trackingState();
   const window = airborneWindow();
   if (tracking.actualLandingMs || providerConfirmedLanding()) return 1;
+  if (Date.now() >= window.landing) return 1;
   const liveLocation = providerLiveLocation();
   if (liveLocation) return clamp(nearestRouteProgress(liveLocation).progress, .001, .999);
   if (Number.isFinite(tracking.lastConfirmedProgress) && tracking.lastConfirmedAt) {
@@ -1056,7 +1145,7 @@ function estimatedAltitude(progress, now = Date.now()) {
   if (tracking.actualLandingMs || tracking.doorOpenedMs || providerConfirmedLanding()) {
     return { feet: 0, phase: tracking.doorOpenedMs ? "At the gate" : "On the ground · landing confirmed", confidence: "confirmed" };
   }
-  if (now >= window.landing) return { feet: null, phase: "Arrival estimate passed · altitude unavailable until landing is confirmed", confidence: "unavailable" };
+  if (now >= window.landing) return { feet: 0, phase: "Estimated touchdown time reached", confidence: "estimated-landed" };
   if (now <= window.takeoff && previewProgress === null) {
     return { feet: 0, phase: tracking.doorClosedMs ? "Taxiing or waiting for takeoff" : "Before takeoff", confidence: "estimated" };
   }
@@ -1071,9 +1160,17 @@ function estimatedAltitude(progress, now = Date.now()) {
   const cruise = estimatedCruiseAltitude();
   const climbFactor = Math.min(clamp(elapsedMinutes / climbMinutes), clamp(progress / .15));
   const descentFactor = Math.min(clamp(remainingMinutes / descentMinutes), clamp((1 - progress) / .25));
-  const feet = Math.round(cruise * Math.min(climbFactor, descentFactor) / 500) * 500;
+  const rawFeet = cruise * Math.min(climbFactor, descentFactor);
+  const feet = rawFeet <= 1000 && descentFactor < 1
+    ? Math.round(rawFeet / 5) * 5
+    : Math.round(rawFeet / 500) * 500;
   const phase = climbFactor < 1 ? "Estimated climb" : descentFactor < 1 ? "Estimated descent" : "Estimated cruise";
-  return { feet: Math.max(0, feet), phase, confidence: "estimated" };
+  return {
+    feet: Math.max(0, feet),
+    phase,
+    confidence: "estimated",
+    finalCountdown: rawFeet > 0 && rawFeet <= 1000 && descentFactor < 1
+  };
 }
 
 function updateSensorPanel() {
@@ -1321,6 +1418,71 @@ function currentClockProgress() {
   return effectiveProgress();
 }
 
+function cardinalDirection(degrees) {
+  const directions = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+  return directions[Math.round(((degrees % 360) + 360) % 360 / 45) % 8];
+}
+
+function aircraftHeading(point, progress, liveProvider) {
+  if (previewProgress === null && sensorState.status === "locked" && Number.isFinite(sensorState.fix?.heading) && sensorState.fix.heading >= 0) {
+    return Number(sensorState.fix.heading);
+  }
+  if (liveProvider && Number.isFinite(liveProvider.trueTrackDeg)) return liveProvider.trueTrackDeg;
+  const ahead = interpolateRoute(journey.route.points, Math.min(1, progress + .003));
+  const behind = interpolateRoute(journey.route.points, Math.max(0, progress - .003));
+  return bearingBetween(progress >= .999 ? behind : point, progress >= .999 ? point : ahead);
+}
+
+function updateHeading(point, progress, liveProvider) {
+  const heading = aircraftHeading(point, progress, liveProvider);
+  const rounded = Math.round(heading) % 360;
+  $("headingCompass").querySelector("i").style.transform = `rotate(${rounded}deg)`;
+  $("headingDetail").textContent = `Travelling ${cardinalDirection(rounded)} · heading ${String(rounded).padStart(3, "0")}°`;
+}
+
+function estimatedSpeedKmh(progress, altitudeFeet) {
+  if (progress <= 0 || progress >= 1) return 0;
+  const average = greatCircleDistanceKm() / (plannedDuration() / 3600000);
+  if (altitudeFeet <= 1000) return Math.max(0, Math.round(Math.min(240, average * .38) * altitudeFeet / 1000));
+  const ramp = Math.min(1, progress / .08, (1 - progress) / .1);
+  return Math.round(average * (.55 + .45 * Math.max(.25, ramp)));
+}
+
+function updateSpeed(progress, altitudeReading, liveProvider) {
+  const phoneSpeedMps = previewProgress === null && sensorState.status === "locked"
+    ? Number(sensorState.fix?.speedMps)
+    : NaN;
+  let kmh;
+  let source;
+  if (Number.isFinite(phoneSpeedMps) && phoneSpeedMps >= 0) {
+    kmh = phoneSpeedMps * 3.6;
+    source = "Phone-reported ground speed";
+    $("speedLabel").textContent = "PHONE-REPORTED SPEED";
+  } else if (liveProvider && Number.isFinite(liveProvider.groundSpeedKt)) {
+    kmh = liveProvider.groundSpeedKt * 1.852;
+    source = "Provider live ground speed";
+    $("speedLabel").textContent = "PROVIDER LIVE SPEED";
+  } else {
+    kmh = estimatedSpeedKmh(progress, Number(altitudeReading?.feet) || 0);
+    source = "Route and flight-time estimate · not live aircraft data";
+    $("speedLabel").textContent = "ESTIMATED SPEED";
+  }
+  const knots = Math.round(kmh / 1.852);
+  $("speed").textContent = `${Math.max(0, Math.round(kmh)).toLocaleString()} km/h`;
+  $("speedDetail").textContent = `${Math.max(0, knots).toLocaleString()} kt · ${source}`;
+}
+
+function updateFinalAltitudeCountdown() {
+  const liveProvider = providerLiveLocation();
+  if (!journey || previewProgress !== null || sensorAltitudeReading() !== null
+      || (liveProvider && Number.isFinite(liveProvider.altitudeFt))) return;
+  const reading = estimatedAltitude(effectiveProgress(), Date.now());
+  if (!reading.finalCountdown) return;
+  $("altitude").textContent = `↓ ${Math.max(0, reading.feet).toLocaleString()} ft`;
+  $("altitudeDetail").textContent = "Final 1,000 ft countdown · estimated, not live aircraft data";
+  updateSpeed(effectiveProgress(), reading, null);
+}
+
 function updatePlaneMarker(progress) {
   if (!mapReady || !journey || !map.getSource("journey")) return;
   map.getSource("journey").setData(routeGeoJson(progress));
@@ -1352,20 +1514,61 @@ function fallbackFlyingOver(progress) {
   const origin = journey.flight.origin.city || journey.flight.origin.code;
   const destination = journey.flight.destination.city || journey.flight.destination.code;
   if (progress <= .08) return `Near ${origin}`;
+  if (progress >= 1 || Date.now() >= airborneWindow().landing) return `Landed in ${destination}`;
   if (progress >= .82) return `Approaching ${destination}`;
   return `En route to ${destination}`;
 }
 
+function nearestVisiblePlace(point) {
+  if (!mapReady || !map || typeof map.queryRenderedFeatures !== "function") return null;
+  if (nearbyPlaceCache && Date.now() - nearbyPlaceCache.checkedAt < 10000
+      && distanceMetres(point, nearbyPlaceCache.point) < 25000) return nearbyPlaceCache.place;
+
+  const pixel = map.project([point.lon, point.lat]);
+  const radius = Math.min(220, Math.max(110, map.getCanvas().clientWidth * .28));
+  const features = map.queryRenderedFeatures([
+    [pixel.x - radius, pixel.y - radius],
+    [pixel.x + radius, pixel.y + radius]
+  ]);
+  const seen = new Set();
+  const candidates = [];
+  for (const feature of features) {
+    const properties = feature.properties || {};
+    const name = properties["name:en"] || properties.name || properties.name_en;
+    if (!name || seen.has(name) || feature.geometry?.type !== "Point") continue;
+    const category = `${feature.sourceLayer || ""} ${feature.layer?.id || ""} ${properties.class || ""} ${properties.type || ""}`.toLowerCase();
+    if (!/(place|city|town|village|municipality|settlement)/.test(category)) continue;
+    if (/(country|continent|state|province|county|ocean|sea|suburb|neighbourhood)/.test(category)) continue;
+    const [lon, lat] = feature.geometry.coordinates || [];
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+    const distanceKm = distanceMetres(point, { lat, lon }) / 1000;
+    if (distanceKm > 220) continue;
+    seen.add(name);
+    candidates.push({ name, distanceKm });
+  }
+  candidates.sort((a, b) => a.distanceKm - b.distanceKm);
+  const place = candidates[0] || null;
+  nearbyPlaceCache = { point: { lat: point.lat, lon: point.lon }, place, checkedAt: Date.now() };
+  return place;
+}
+
 function updateFlyingOver(point, progress) {
   const field = $("flyingOver");
-  field.textContent = fallbackFlyingOver(progress);
+  const landed = progress >= 1 || Date.now() >= airborneWindow().landing;
+  const place = landed ? null : nearestVisiblePlace(point);
+  field.textContent = place ? `Flying over ${place.name}` : fallbackFlyingOver(progress);
   const liveProvider = previewProgress === null && providerLiveLocation();
-  $("flyingOverDetail").textContent = sensorState.status === "locked" && previewProgress === null
+  $("flyingOverDetail").textContent = landed
+    ? "Estimated landing time reached"
+    : place
+    ? `Nearest city or town label in the cached map · approximately ${Math.round(place.distanceKm)} km away`
+    : sensorState.status === "locked" && previewProgress === null
     ? "Progress corrected by phone location"
     : liveProvider ? "Position corrected by provider live data" : "Route estimate — not live GPS";
 }
 
 function renderTracker() {
+  updateLiveClock();
   const progress = previewProgress === null ? effectiveProgress() : previewProgress;
   const point = interpolateRoute(journey.route.points, progress);
   const now = Date.now();
@@ -1373,10 +1576,11 @@ function renderTracker() {
   const window = airborneWindow();
   const departure = window.takeoff;
   const arrival = window.landing;
-  const phoneAltitude = previewProgress === null && sensorState.status === "locked" ? sensorAltitudeReading() : null;
+  const estimatedLanded = previewProgress === null && now >= arrival;
+  const phoneAltitude = !estimatedLanded && previewProgress === null && sensorState.status === "locked" ? sensorAltitudeReading() : null;
   const fallbackAltitude = estimatedAltitude(progress, now);
-  const phonePosition = previewProgress === null && sensorState.status === "locked" && sensorState.fix;
-  const liveProvider = previewProgress === null ? providerLiveLocation() : null;
+  const phonePosition = !estimatedLanded && previewProgress === null && sensorState.status === "locked" && sensorState.fix;
+  const liveProvider = !estimatedLanded && previewProgress === null ? providerLiveLocation() : null;
   const providerAltitude = liveProvider && Number.isFinite(liveProvider.altitudeFt) ? liveProvider.altitudeFt : null;
   const providerLanding = providerConfirmedLanding();
 
@@ -1384,12 +1588,14 @@ function renderTracker() {
   $("progressText").textContent = `${Math.round(progress * 100)}%`;
   $("progressBar").style.width = `${progress * 100}%`;
   $("previewSlider").value = Math.round(progress * 100);
+  $("previewSlider").style.setProperty("--slider-progress", `${progress * 100}%`);
   const displayedPosition = phonePosition ? sensorState.fix : liveProvider || point;
   $("coordinatesLabel").textContent = phonePosition
     ? "PHONE-REPORTED COORDINATES"
     : liveProvider ? "PROVIDER LIVE COORDINATES" : "ESTIMATED COORDINATES";
   $("latitude").textContent = `${Math.abs(displayedPosition.lat).toFixed(2)}°${displayedPosition.lat >= 0 ? "N" : "S"}`;
   $("longitude").textContent = `${Math.abs(displayedPosition.lon).toFixed(2)}°${displayedPosition.lon >= 0 ? "E" : "W"}`;
+  updateHeading(displayedPosition, progress, liveProvider);
   $("altitudeLabel").textContent = phoneAltitude !== null
     ? "PHONE-REPORTED ALTITUDE"
     : providerAltitude !== null ? "PROVIDER LIVE ALTITUDE" : "ESTIMATED ALTITUDE";
@@ -1408,12 +1614,18 @@ function renderTracker() {
     $("altitude").textContent = "Unavailable";
     $("altitudeDetail").textContent = fallbackAltitude.phase;
   } else {
-    $("altitude").textContent = `≈ ${Math.max(0, fallbackAltitude.feet).toLocaleString()} ft`;
+    $("altitude").textContent = fallbackAltitude.finalCountdown
+      ? `↓ ${Math.max(0, fallbackAltitude.feet).toLocaleString()} ft`
+      : `≈ ${Math.max(0, fallbackAltitude.feet).toLocaleString()} ft`;
     const range = Math.max(1500, Math.round(fallbackAltitude.feet * .25 / 500) * 500);
     const low = Math.max(0, fallbackAltitude.feet - range);
     const high = fallbackAltitude.feet + range;
-    $("altitudeDetail").textContent = `${fallbackAltitude.phase} · likely ${low.toLocaleString()}–${high.toLocaleString()} ft · not live aircraft data`;
+    $("altitudeDetail").textContent = fallbackAltitude.finalCountdown
+      ? "Final 1,000 ft countdown · estimated, not live aircraft data"
+      : `${fallbackAltitude.phase} · likely ${low.toLocaleString()}–${high.toLocaleString()} ft · not live aircraft data`;
   }
+  const displayedAltitude = phoneAltitude || (providerAltitude !== null ? { feet: providerAltitude } : fallbackAltitude);
+  updateSpeed(progress, displayedAltitude, liveProvider);
   updateTimelineTimes(progress);
   updateFlyingOver(point, progress);
   updateMilestones();
@@ -1438,9 +1650,9 @@ function renderTracker() {
       ? `Landing confirmed by ${tracking.landingSource === "phone" ? "phone location" : tracking.landingSource === "provider" ? "provider runway time" : tracking.landingSource === "gate-confirmation" ? "gate arrival" : "you"}`
       : "Landing confirmed";
   } else if (now >= arrival) {
-    $("phaseLabel").textContent = "ESTIMATE EXPIRED";
-    $("remainingTime").textContent = "Check status";
-    $("phaseDetail").textContent = "The estimated arrival time passed, but AirTrace has no landing confirmation";
+    $("phaseLabel").textContent = "JOURNEY STATUS";
+    $("remainingTime").textContent = "Landed";
+    $("phaseDetail").textContent = "Estimated landing time reached · awaiting provider or manual confirmation";
   } else if (now < departure) {
     $("phaseLabel").textContent = tracking.doorClosedMs ? "TAXI / WAITING" : "TAKEOFF IN";
     $("remainingTime").textContent = formatDuration(departure - now);
@@ -1451,10 +1663,6 @@ function renderTracker() {
     $("phaseDetail").textContent = `${formatDuration(now - departure)} elapsed`;
   }
 
-  $("baggageBelt").textContent = journey.flight.baggageBelt || "Not announced yet";
-  $("baggageDetail").textContent = journey.flight.baggageBelt
-    ? `Arrival information last refreshed ${journey.liveRefreshedAt ? new Date(journey.liveRefreshedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "when the flight was prepared"}.`
-    : navigator.onLine ? "No belt has been supplied yet. Try refreshing closer to arrival." : "AirTrace will check again when an internet connection returns.";
   $("refreshFlight").disabled = !navigator.onLine || !journey.lookup;
 }
 
@@ -1485,7 +1693,12 @@ function openJourney(data) {
   updateMapRoute();
   renderTracker();
   clearInterval(clockTimer);
-  clockTimer = setInterval(() => { if (previewProgress === null) renderTracker(); }, 1000);
+  clockTimer = setInterval(() => {
+    updateLiveClock();
+    if (previewProgress === null) renderTracker();
+  }, 1000);
+  clearInterval(altitudeTimer);
+  altitudeTimer = setInterval(updateFinalAltitudeCountdown, 100);
   clearInterval(refreshTimer);
   refreshTimer = setInterval(() => {
     const tracking = journey?.tracking || {};
@@ -1516,7 +1729,7 @@ async function refreshFlightData(options = {}) {
     openJourney(body);
   } catch (error) {
     if (!options.silent) {
-      $("baggageDetail").textContent = error.message || "Live details could not be refreshed.";
+      $("savedStatus").textContent = error.message || "Live details could not be refreshed.";
     }
   } finally {
     button.textContent = oldText;
@@ -1569,6 +1782,7 @@ function showMessage(text, isError = false) {
 
 function showFreshJourney() {
   clearInterval(clockTimer);
+  clearInterval(altitudeTimer);
   clearInterval(refreshTimer);
   cancelAnimationFrame(animationFrame);
   stopSensorAssist();
@@ -1645,7 +1859,7 @@ window.addEventListener("offline", setNetworkState);
 setDefaultDate();
 setNetworkState();
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("./sw.js?v=21").then(registration => {
+  navigator.serviceWorker.register("./sw.js?v=22").then(registration => {
     registration.update().catch(() => {});
   }).catch(() => {});
 }
