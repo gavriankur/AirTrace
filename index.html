@@ -184,7 +184,7 @@
     .milestone-heading small { color: #71838d; text-align: right; }
     .milestone-grid {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 10px;
     }
     .milestone-card {
@@ -421,7 +421,7 @@
       .milestone-panel { padding: 15px; }
       .milestone-heading { align-items: flex-start; flex-direction: column; }
       .milestone-heading small { text-align: left; }
-      .milestone-grid { grid-template-columns: 1fr 1fr; }
+      .milestone-grid { grid-template-columns: 1fr; }
       .metrics { grid-template-columns: 1fr 1fr !important; }
       .metrics .metric-wide { grid-column: 1 / -1; }
       .metrics .metric-altitude { border-right: 1px solid rgba(16, 44, 60, .16); }
@@ -593,9 +593,9 @@
         <div class="milestone-heading">
           <div>
             <span>BLOCK & FLIGHT MILESTONES</span>
-            <strong>Gate to gate</strong>
+            <strong>Departure to landing</strong>
           </div>
-          <small>Block times are gate-only. Airborne timing uses confirmed runway events or a distance model.</small>
+          <small>Gate departure is shown separately. Airborne timing uses confirmed runway events or a distance model.</small>
         </div>
 
         <div class="milestone-grid">
@@ -620,12 +620,6 @@
             <button id="landedButton" type="button">We have landed</button>
           </article>
 
-          <article class="milestone-card" id="doorOpenedCard">
-            <span>04 · GATE IN</span>
-            <strong id="doorOpenedTime">—</strong>
-            <small id="doorOpenedDetail">Scheduled or revised gate arrival</small>
-            <button id="doorOpenedButton" type="button">Doors opened now</button>
-          </article>
         </div>
       </div>
 
@@ -772,7 +766,7 @@
   </script>
   <script>
 const STORAGE_KEY = "airtrace.preparedJourney.v2";
-const APP_VERSION = "25";
+const APP_VERSION = "26";
 const DIAGNOSTIC_LOG_KEY = "airtrace.diagnostics.v1";
 const DIAGNOSTIC_INSTALL_KEY = "airtrace.installationId.v1";
 const DIAGNOSTIC_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
@@ -994,6 +988,29 @@ const WATER_REGIONS = [
   ["Caribbean Sea", -90, 9, -59, 24],
   ["Gulf of Mexico", -98, 18, -80, 31]
 ];
+const AIRPORT_REGION_NAMES = {
+  AGX:"Lakshadweep", AGR:"Uttar Pradesh", AMD:"Gujarat", ATQ:"Punjab", AYJ:"Uttar Pradesh",
+  BBI:"Odisha", BDQ:"Gujarat", BHO:"Madhya Pradesh", BHJ:"Gujarat", BLR:"Karnataka", BKB:"Rajasthan", BOM:"Maharashtra",
+  CCJ:"Kerala", CCU:"West Bengal", CJB:"Tamil Nadu", CNN:"Kerala", COK:"Kerala",
+  DBR:"Bihar", DED:"Uttarakhand", DEL:"Delhi", DGH:"Jharkhand", DIB:"Assam", DMU:"Nagaland",
+  GAU:"Assam", GAY:"Bihar", GOI:"Goa", GOX:"Goa", GOP:"Uttar Pradesh", GWL:"Madhya Pradesh",
+  HBX:"Karnataka", HYD:"Telangana", IDR:"Madhya Pradesh", IMF:"Manipur", ISK:"Maharashtra", IXA:"Tripura",
+  IXB:"West Bengal", IXC:"Chandigarh", IXD:"Uttar Pradesh", IXE:"Karnataka", IXG:"Karnataka", IXJ:"Jammu and Kashmir",
+  IXM:"Tamil Nadu", IXR:"Jharkhand", IXS:"Assam", IXU:"Maharashtra", IXZ:"Andaman and Nicobar Islands",
+  JAI:"Rajasthan", JDH:"Rajasthan", JGA:"Gujarat", JGB:"Chhattisgarh", JLR:"Madhya Pradesh", JRG:"Odisha", JRH:"Assam", JSA:"Rajasthan",
+  KNU:"Uttar Pradesh", KLH:"Maharashtra", KQH:"Rajasthan", KUU:"Himachal Pradesh",
+  LKO:"Uttar Pradesh", LUH:"Punjab", MAA:"Tamil Nadu", MYQ:"Karnataka", NAG:"Maharashtra", PAT:"Bihar", PGH:"Uttarakhand",
+  PNY:"Puducherry", PNQ:"Maharashtra", PRY:"Uttar Pradesh", PYG:"Sikkim", RAJ:"Gujarat", RDP:"West Bengal", RPR:"Chhattisgarh",
+  SHL:"Meghalaya", SLV:"Himachal Pradesh", SXR:"Jammu and Kashmir", STV:"Gujarat", TCR:"Tamil Nadu", TEZ:"Assam",
+  TIR:"Andhra Pradesh", TRV:"Kerala", TRZ:"Tamil Nadu", UDR:"Rajasthan", VGA:"Andhra Pradesh", VNS:"Uttar Pradesh", VTZ:"Andhra Pradesh",
+  AUH:"Abu Dhabi", DXB:"Dubai", SHJ:"Sharjah", HND:"Tokyo", ITM:"Osaka", ICN:"Incheon", LAX:"California", SFO:"California", JFK:"New York", EWR:"New Jersey"
+};
+
+function airportDisplayName(airport) {
+  const city = airport?.city || airport?.code || "—";
+  const region = airport?.region || AIRPORT_REGION_NAMES[String(airport?.code || "").toUpperCase()];
+  return region && region.toLowerCase() !== String(city).toLowerCase() ? `${city}, ${region}` : city;
+}
 
 function saveJourney() {
   if (journey) localStorage.setItem(STORAGE_KEY, JSON.stringify(journey));
@@ -1578,23 +1595,6 @@ function recordDoorClosed() {
   renderTracker();
 }
 
-function recordDoorOpened() {
-  const tracking = trackingState();
-  const now = Date.now();
-  tracking.doorOpenedMs = now;
-  tracking.doorOpenedSource = "manual";
-  logDiagnostic("doors_opened_recorded", { source: "manual" });
-  if (!tracking.actualLandingMs) {
-    const providerLanding = optionalTimestamp(journey.flight.arrivalRunwayUtc);
-    tracking.actualLandingMs = providerLanding && providerLanding <= now ? providerLanding : now;
-    tracking.landingSource = providerLanding && providerLanding <= now ? "provider" : "gate-confirmation";
-  }
-  tracking.lastConfirmedProgress = 1;
-  tracking.lastConfirmedAt = now;
-  saveJourney();
-  renderTracker();
-}
-
 function milestoneClock(timestamp, timeZone) {
   return timestamp ? formatTimelineClock(timestamp, timeZone) : "—";
 }
@@ -1629,7 +1629,6 @@ function updateMilestones() {
   const originZone = journey.flight.origin.timeZone;
   const destinationZone = journey.flight.destination.timeZone;
   const gateOutProvider = optionalTimestamp(journey.flight.departureUtc);
-  const gateInProvider = optionalTimestamp(journey.flight.arrivalUtc);
 
   setMilestone(
     "doorClosed",
@@ -1656,18 +1655,9 @@ function updateMilestones() {
       : airborneTimingLabel(window, "landing"),
     Boolean(tracking.actualLandingMs || providerConfirmedLanding())
   );
-  setMilestone(
-    "doorOpened",
-    tracking.doorOpenedMs || gateInProvider,
-    destinationZone,
-    tracking.doorOpenedMs ? "Confirmed by you" : journey.flight.arrivalRevisedUtc ? "Provider revised gate time" : "Provider scheduled/estimated gate time",
-    Boolean(tracking.doorOpenedMs)
-  );
-
   $("doorClosedButton").textContent = tracking.doorClosedMs ? "Update gate-out to now" : "Doors closed now";
   $("takeoffButton").textContent = tracking.actualTakeoffMs ? "Update takeoff to now" : "We just took off";
   $("landedButton").textContent = tracking.actualLandingMs ? "Update landing to now" : "We have landed";
-  $("doorOpenedButton").textContent = tracking.doorOpenedMs ? "Update gate-in to now" : "Doors opened now";
 }
 
 function handleSensorPosition(position) {
@@ -2126,8 +2116,8 @@ function openJourney(data) {
   const providerStatus = String(data.flight.status || "").trim();
   const usefulStatus = providerStatus && !/^unknown$/i.test(providerStatus) ? ` · ${providerStatus}` : "";
   $("flightIdentity").textContent = `${data.flight.airline || "Flight"} · ${data.flight.ident}${usefulStatus}`;
-  $("originCity").textContent = data.flight.origin.city || data.flight.origin.code;
-  $("destinationCity").textContent = data.flight.destination.city || data.flight.destination.code;
+  $("originCity").textContent = airportDisplayName(data.flight.origin);
+  $("destinationCity").textContent = airportDisplayName(data.flight.destination);
   $("originCode").textContent = data.flight.origin.code;
   $("destinationCode").textContent = data.flight.destination.code;
   const initialWindow = airborneWindow();
@@ -2310,7 +2300,6 @@ $("sensorButton").addEventListener("click", toggleSensorAssist);
 $("doorClosedButton").addEventListener("click", recordDoorClosed);
 $("takeoffButton").addEventListener("click", () => recordTakeoff("manual"));
 $("landedButton").addEventListener("click", () => recordLanding("manual"));
-$("doorOpenedButton").addEventListener("click", recordDoorOpened);
 $("refreshFlight").addEventListener("click", () => refreshFlightData());
 $("sendDiagnostics").addEventListener("click", sendDiagnosticReport);
 $("shareDiagnostics").addEventListener("click", shareDiagnosticReport);
@@ -2333,7 +2322,7 @@ setNetworkState();
 logDiagnostic("app_started", { version: APP_VERSION, online: navigator.onLine });
 updateDiagnosticsStatus();
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("./sw.js?v=25").then(registration => {
+  navigator.serviceWorker.register("./sw.js?v=26").then(registration => {
     logDiagnostic("service_worker_registered", { controlled: Boolean(navigator.serviceWorker.controller) });
     registration.update().catch(error => logDiagnostic("service_worker_update_failed", { message: safeDiagnosticText(error.message) }));
   }).catch(error => logDiagnostic("service_worker_registration_failed", { message: safeDiagnosticText(error.message) }));

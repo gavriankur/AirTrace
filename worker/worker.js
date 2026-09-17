@@ -1,5 +1,22 @@
 const AERODATABOX_BASE = "https://aerodatabox.p.rapidapi.com";
 const AVIATION_WEATHER_BASE = "https://aviationweather.gov/api/data";
+const AIRPORT_REGION_NAMES = {
+  AGX:"Lakshadweep", AGR:"Uttar Pradesh", AMD:"Gujarat", ATQ:"Punjab", AYJ:"Uttar Pradesh",
+  BBI:"Odisha", BDQ:"Gujarat", BHO:"Madhya Pradesh", BHJ:"Gujarat", BLR:"Karnataka", BKB:"Rajasthan", BOM:"Maharashtra",
+  CCJ:"Kerala", CCU:"West Bengal", CJB:"Tamil Nadu", CNN:"Kerala", COK:"Kerala",
+  DBR:"Bihar", DED:"Uttarakhand", DEL:"Delhi", DGH:"Jharkhand", DIB:"Assam", DMU:"Nagaland",
+  GAU:"Assam", GAY:"Bihar", GOI:"Goa", GOX:"Goa", GOP:"Uttar Pradesh", GWL:"Madhya Pradesh",
+  HBX:"Karnataka", HYD:"Telangana", IDR:"Madhya Pradesh", IMF:"Manipur", ISK:"Maharashtra", IXA:"Tripura",
+  IXB:"West Bengal", IXC:"Chandigarh", IXD:"Uttar Pradesh", IXE:"Karnataka", IXG:"Karnataka", IXJ:"Jammu and Kashmir",
+  IXM:"Tamil Nadu", IXR:"Jharkhand", IXS:"Assam", IXU:"Maharashtra", IXZ:"Andaman and Nicobar Islands",
+  JAI:"Rajasthan", JDH:"Rajasthan", JGA:"Gujarat", JGB:"Chhattisgarh", JLR:"Madhya Pradesh", JRG:"Odisha", JRH:"Assam", JSA:"Rajasthan",
+  KNU:"Uttar Pradesh", KLH:"Maharashtra", KQH:"Rajasthan", KUU:"Himachal Pradesh",
+  LKO:"Uttar Pradesh", LUH:"Punjab", MAA:"Tamil Nadu", MYQ:"Karnataka", NAG:"Maharashtra", PAT:"Bihar", PGH:"Uttarakhand",
+  PNY:"Puducherry", PNQ:"Maharashtra", PRY:"Uttar Pradesh", PYG:"Sikkim", RAJ:"Gujarat", RDP:"West Bengal", RPR:"Chhattisgarh",
+  SHL:"Meghalaya", SLV:"Himachal Pradesh", SXR:"Jammu and Kashmir", STV:"Gujarat", TCR:"Tamil Nadu", TEZ:"Assam",
+  TIR:"Andhra Pradesh", TRV:"Kerala", TRZ:"Tamil Nadu", UDR:"Rajasthan", VGA:"Andhra Pradesh", VNS:"Uttar Pradesh", VTZ:"Andhra Pradesh",
+  AUH:"Abu Dhabi", DXB:"Dubai", SHJ:"Sharjah", HND:"Tokyo", ITM:"Osaka", ICN:"Incheon", LAX:"California", SFO:"California", JFK:"New York", EWR:"New Jersey"
+};
 
 export default {
   async fetch(request, env) {
@@ -202,7 +219,7 @@ async function prepareJourney(ident, date, apiKey) {
   const turbulenceOutlook = await prepareTurbulenceOutlook(routePoints, departureUtc, arrivalUtc);
 
   return {
-    schemaVersion: 9,
+    schemaVersion: 10,
     preparedAt: new Date().toISOString(),
     provider: "AeroDataBox",
     turbulenceOutlook,
@@ -360,11 +377,14 @@ function airportSummary(airport) {
   const lat = Number(airport?.location?.lat);
   const lon = Number(airport?.location?.lon);
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) throw new HttpError(502, "Airport coordinates were unavailable.");
+  const code = airport.iata || airport.icao || airport.localCode || "—";
   return {
-    code: airport.iata || airport.icao || airport.localCode || "—",
+    code,
     icao: airport.icao || null,
     city: airport.municipalityName || airport.shortName || airport.name,
     name: airport.name,
+    region: airport.regionName || airport.stateName || airport.region || AIRPORT_REGION_NAMES[String(code).toUpperCase()] || null,
+    countryCode: airport.countryCode || airport.country?.code || airport.country?.iso2 || null,
     timeZone: airport.timeZone || "UTC",
     lat,
     lon,

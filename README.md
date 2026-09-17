@@ -4,6 +4,12 @@ Airtrace prepares a flight while the user is online, then estimates the aircraft
 
 This is an **estimated journey**, not live aircraft tracking.
 
+## v26 simplified milestones and state names
+
+V26 removes the **Doors opened now / Gate in** milestone card. The remaining milestones are gate departure, wheels up and wheels down.
+
+Origin and destination headings now use `City, State/Region` when a reliable airport-region match is available, for example `Mumbai, Maharashtra → Bengaluru, Karnataka`. The Worker also includes the resolved region in newly prepared journeys; the page contains an offline fallback for common airports so existing saved journeys can display the region without being prepared again.
+
 ## v25 opt-in diagnostics
 
 V25 keeps up to seven days of troubleshooting events locally on each device. It records application version, network changes, lookup/refresh results, service-worker and map errors, sensor permission/status, data-source changes and coarse progress checkpoints. Exact coordinates are not logged by default.
