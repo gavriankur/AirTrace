@@ -766,7 +766,7 @@
   </script>
   <script>
 const STORAGE_KEY = "airtrace.preparedJourney.v2";
-const APP_VERSION = "26";
+const APP_VERSION = "27";
 const DIAGNOSTIC_LOG_KEY = "airtrace.diagnostics.v1";
 const DIAGNOSTIC_INSTALL_KEY = "airtrace.installationId.v1";
 const DIAGNOSTIC_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
@@ -1005,6 +1005,28 @@ const AIRPORT_REGION_NAMES = {
   TIR:"Andhra Pradesh", TRV:"Kerala", TRZ:"Tamil Nadu", UDR:"Rajasthan", VGA:"Andhra Pradesh", VNS:"Uttar Pradesh", VTZ:"Andhra Pradesh",
   AUH:"Abu Dhabi", DXB:"Dubai", SHJ:"Sharjah", HND:"Tokyo", ITM:"Osaka", ICN:"Incheon", LAX:"California", SFO:"California", JFK:"New York", EWR:"New Jersey"
 };
+const PLACE_REGION_NAMES = {
+  agra:"Uttar Pradesh", ahmedabad:"Gujarat", ajmer:"Rajasthan", amritsar:"Punjab", ayodhya:"Uttar Pradesh",
+  ballari:"Karnataka", bellary:"Karnataka", bengaluru:"Karnataka", bangalore:"Karnataka", belagavi:"Karnataka", belgaum:"Karnataka",
+  bhopal:"Madhya Pradesh", bhubaneswar:"Odisha", chandigarh:"Chandigarh", chennai:"Tamil Nadu", coimbatore:"Tamil Nadu",
+  dehradun:"Uttarakhand", delhi:"Delhi", dharwad:"Karnataka", goa:"Goa", gorakhpur:"Uttar Pradesh", guwahati:"Assam",
+  hubballi:"Karnataka", hubli:"Karnataka", hyderabad:"Telangana", imphal:"Manipur", indore:"Madhya Pradesh",
+  jaipur:"Rajasthan", jaisalmer:"Rajasthan", jammu:"Jammu and Kashmir", jamnagar:"Gujarat", jodhpur:"Rajasthan",
+  kannur:"Kerala", kanpur:"Uttar Pradesh", kochi:"Kerala", cochin:"Kerala", kolhapur:"Maharashtra", kolkata:"West Bengal",
+  kozhikode:"Kerala", lucknow:"Uttar Pradesh", ludhiana:"Punjab", madurai:"Tamil Nadu", mangaluru:"Karnataka", mangalore:"Karnataka",
+  mumbai:"Maharashtra", mysuru:"Karnataka", mysore:"Karnataka", nagpur:"Maharashtra", nashik:"Maharashtra", newdelhi:"Delhi",
+  panaji:"Goa", patna:"Bihar", prayagraj:"Uttar Pradesh", pune:"Maharashtra", raipur:"Chhattisgarh", rajkot:"Gujarat",
+  ranchi:"Jharkhand", shillong:"Meghalaya", shimla:"Himachal Pradesh", srinagar:"Jammu and Kashmir", surat:"Gujarat",
+  thiruvananthapuram:"Kerala", tiruchirappalli:"Tamil Nadu", udaipur:"Rajasthan", vadodara:"Gujarat", varanasi:"Uttar Pradesh",
+  vijayawada:"Andhra Pradesh", visakhapatnam:"Andhra Pradesh"
+};
+
+function placeRegionName(name, properties = {}) {
+  const supplied = properties.region || properties.state || properties.province || properties["addr:state"] || properties["name:state"];
+  if (supplied) return String(supplied);
+  const key = String(name || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z]/g, "");
+  return PLACE_REGION_NAMES[key] || null;
+}
 
 function airportDisplayName(airport) {
   const city = airport?.city || airport?.code || "—";
@@ -1917,22 +1939,30 @@ function nearestVisiblePlace(point) {
   ]);
   const seen = new Set();
   const candidates = [];
+  const regions = [];
   for (const feature of features) {
     const properties = feature.properties || {};
     const name = properties["name:en"] || properties.name || properties.name_en;
-    if (!name || seen.has(name) || feature.geometry?.type !== "Point") continue;
+    if (!name || feature.geometry?.type !== "Point") continue;
     const category = `${feature.sourceLayer || ""} ${feature.layer?.id || ""} ${properties.class || ""} ${properties.type || ""}`.toLowerCase();
-    if (!/(place|city|town|village|municipality|settlement)/.test(category)) continue;
-    if (/(country|continent|state|province|county|ocean|sea|suburb|neighbourhood)/.test(category)) continue;
     const [lon, lat] = feature.geometry.coordinates || [];
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
     const distanceKm = distanceMetres(point, { lat, lon }) / 1000;
+    if (/(state|province|region)/.test(category) && distanceKm <= 900) {
+      regions.push({ name, distanceKm });
+      continue;
+    }
+    if (seen.has(name)) continue;
+    if (!/(place|city|town|village|municipality|settlement)/.test(category)) continue;
+    if (/(country|continent|state|province|county|ocean|sea|suburb|neighbourhood)/.test(category)) continue;
     if (distanceKm > 220) continue;
     seen.add(name);
-    candidates.push({ name, distanceKm });
+    candidates.push({ name, distanceKm, region: placeRegionName(name, properties) });
   }
   candidates.sort((a, b) => a.distanceKm - b.distanceKm);
+  regions.sort((a, b) => a.distanceKm - b.distanceKm);
   const place = candidates[0] || null;
+  if (place && !place.region && regions[0] && regions[0].name !== place.name) place.region = regions[0].name;
   nearbyPlaceCache = { point: { lat: point.lat, lon: point.lon }, place, checkedAt: Date.now() };
   return place;
 }
@@ -1944,14 +1974,14 @@ function updateFlyingOver(point, progress) {
   const place = landed || waterBody ? null : nearestVisiblePlace(point);
   field.textContent = waterBody
     ? `Flying over the ${waterBody}`
-    : place ? `Flying over ${place.name}` : fallbackFlyingOver(progress);
+    : place ? `Flying over ${place.name}${place.region ? `, ${place.region}` : ""}` : fallbackFlyingOver(progress);
   const liveProvider = previewProgress === null && providerLiveLocation();
   $("flyingOverDetail").textContent = landed
     ? "Estimated landing time reached"
     : waterBody
     ? "Water body identified from the saved route and cached map surface"
     : place
-    ? `Nearest city or town label in the cached map · approximately ${Math.round(place.distanceKm)} km away`
+      ? `Nearest city or town label in the cached map${place.region ? " · state/region identified" : ""} · approximately ${Math.round(place.distanceKm)} km away`
     : sensorState.status === "locked" && previewProgress === null
     ? "Progress corrected by phone location"
     : liveProvider ? "Position corrected by provider live data" : "Route estimate — not live GPS";
@@ -2322,7 +2352,7 @@ setNetworkState();
 logDiagnostic("app_started", { version: APP_VERSION, online: navigator.onLine });
 updateDiagnosticsStatus();
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("./sw.js?v=26").then(registration => {
+  navigator.serviceWorker.register("./sw.js?v=27").then(registration => {
     logDiagnostic("service_worker_registered", { controlled: Boolean(navigator.serviceWorker.controller) });
     registration.update().catch(error => logDiagnostic("service_worker_update_failed", { message: safeDiagnosticText(error.message) }));
   }).catch(error => logDiagnostic("service_worker_registration_failed", { message: safeDiagnosticText(error.message) }));
