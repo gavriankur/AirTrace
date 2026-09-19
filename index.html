@@ -951,6 +951,7 @@ let journey = null;
 let previewProgress = null;
 let clockTimer = null;
 let altitudeTimer = null;
+let finalAltitudeCount = null;
 let refreshTimer = null;
 let animationFrame = null;
 let map = null;
@@ -1838,12 +1839,23 @@ function updateSpeed(progress, altitudeReading, liveProvider) {
 function updateFinalAltitudeCountdown() {
   const liveProvider = providerLiveLocation();
   if (!journey || previewProgress !== null || sensorAltitudeReading() !== null
-      || (liveProvider && Number.isFinite(liveProvider.altitudeFt))) return;
+      || (liveProvider && Number.isFinite(liveProvider.altitudeFt))) {
+    finalAltitudeCount = null;
+    return;
+  }
   const reading = estimatedAltitude(effectiveProgress(), Date.now());
-  if (!reading.finalCountdown) return;
-  $("altitude").textContent = `↓ ${Math.max(0, reading.feet).toLocaleString()} ft`;
+  if (!reading.finalCountdown) {
+    finalAltitudeCount = null;
+    return;
+  }
+  if (finalAltitudeCount === null) {
+    finalAltitudeCount = reading.feet >= 9950 ? 10000 : Math.max(0, reading.feet);
+  } else {
+    finalAltitudeCount = Math.max(0, finalAltitudeCount - 1);
+  }
+  $("altitude").textContent = `↓ ${finalAltitudeCount.toLocaleString()} ft`;
   $("altitudeDetail").textContent = "Final 10,000 ft countdown · exact whole-foot display · estimated, not live aircraft data";
-  updateSpeed(effectiveProgress(), reading, null);
+  updateSpeed(effectiveProgress(), { ...reading, feet: finalAltitudeCount }, null);
 }
 
 function updatePlaneMarker(progress) {
@@ -2041,22 +2053,31 @@ function renderTracker() {
     ? "PHONE-REPORTED ALTITUDE"
     : providerAltitude !== null ? "PROVIDER LIVE ALTITUDE" : "ESTIMATED ALTITUDE";
   if (phoneAltitude !== null) {
+    finalAltitudeCount = null;
     $("altitude").textContent = `${Math.max(0, phoneAltitude.feet).toLocaleString()} ft`;
     $("altitudeDetail").textContent = phoneAltitude.accuracyFeet === null
       ? "GPS altitude · accuracy not supplied by the phone"
       : `GPS altitude · ±${phoneAltitude.accuracyFeet.toLocaleString()} ft${phoneAltitude.accuracyFeet > 6500 ? " · low confidence" : ""}`;
   } else if (providerAltitude !== null) {
+    finalAltitudeCount = null;
     $("altitude").textContent = `${Math.max(0, providerAltitude).toLocaleString()} ft`;
     $("altitudeDetail").textContent = `Reported ${new Date(liveProvider.reportedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · online provider data`;
   } else if (fallbackAltitude.confidence === "confirmed") {
+    finalAltitudeCount = null;
     $("altitude").textContent = `${Math.max(0, fallbackAltitude.feet).toLocaleString()} ft`;
     $("altitudeDetail").textContent = fallbackAltitude.phase;
   } else if (fallbackAltitude.feet === null) {
+    finalAltitudeCount = null;
     $("altitude").textContent = "Unavailable";
     $("altitudeDetail").textContent = fallbackAltitude.phase;
   } else {
+    if (fallbackAltitude.finalCountdown && finalAltitudeCount === null) {
+      finalAltitudeCount = fallbackAltitude.feet >= 9950 ? 10000 : Math.max(0, fallbackAltitude.feet);
+    } else if (!fallbackAltitude.finalCountdown) {
+      finalAltitudeCount = null;
+    }
     $("altitude").textContent = fallbackAltitude.finalCountdown
-      ? `↓ ${Math.max(0, fallbackAltitude.feet).toLocaleString()} ft`
+      ? `↓ ${finalAltitudeCount.toLocaleString()} ft`
       : `≈ ${Math.max(0, fallbackAltitude.feet).toLocaleString()} ft`;
     const range = Math.max(1500, Math.round(fallbackAltitude.feet * .25 / 500) * 500);
     const low = Math.max(0, fallbackAltitude.feet - range);
