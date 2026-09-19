@@ -4,6 +4,10 @@ Airtrace prepares a flight while the user is online, then estimates the aircraft
 
 This is an **estimated journey**, not live aircraft tracking.
 
+## v28 state name placement
+
+V28 keeps the large route heading concise with city names only, for example `Mumbai → Bengaluru`. State or region names remain limited to the lower **Currently flying over** line, such as **Flying over Ballari, Karnataka**.
+
 ## v27 state/region in “Currently flying over”
 
 V27 adds a state or region to the nearby-place description when it can be identified reliably, for example **Flying over Ballari, Karnataka**. It first uses regional attributes supplied by the cached map, then nearby state/province labels, and finally an offline place-to-state fallback for common Indian cities. When no reliable region is available, AirTrace keeps the city-only wording instead of guessing.
