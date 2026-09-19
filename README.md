@@ -4,6 +4,10 @@ Airtrace prepares a flight while the user is online, then estimates the aircraft
 
 This is an **estimated journey**, not live aircraft tracking.
 
+## v31 climb and descent counters
+
+V31 adds a rapid whole-foot estimated-altitude counter for the first 10,000 feet after takeoff, shown with an upward arrow. The existing final-descent counter runs from 10,000 feet down to zero with a downward arrow. Above 10,000 feet, AirTrace returns to the normal estimated climb, cruise or descent display. Live phone or provider altitude still takes priority, and reaching 100% remains locked to 0 feet.
+
 ## v30 touchdown consistency
 
 V30 keeps the final altitude animation synchronized with the calculated descent, including when Safari slows background timers. A journey below 100% can display no more than 99%; once it genuinely reaches 100%, the estimated altitude is forced to 0 feet and the touchdown message is shown. Moving the preview slider to 100% follows the same rule.
