@@ -4,6 +4,10 @@ Airtrace prepares a flight while the user is online, then estimates the aircraft
 
 This is an **estimated journey**, not live aircraft tracking.
 
+## v32 reliable online refresh
+
+V32 makes **Refresh live details** provide visible progress, success and failure messages, including a successful refresh timestamp with seconds. It can reconstruct the flight number and departure date for journeys saved by older AirTrace versions that do not contain a `lookup` object. Requests explicitly bypass browser caches, duplicate refreshes are blocked, and offline or incomplete-journey failures are explained instead of silently doing nothing.
+
 ## v31 climb and descent counters
 
 V31 adds a rapid whole-foot estimated-altitude counter for the first 10,000 feet after takeoff, shown with an upward arrow. The existing final-descent counter runs from 10,000 feet down to zero with a downward arrow. Above 10,000 feet, AirTrace returns to the normal estimated climb, cruise or descent display. Live phone or provider altitude still takes priority, and reaching 100% remains locked to 0 feet.

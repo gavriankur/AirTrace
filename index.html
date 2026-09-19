@@ -566,7 +566,7 @@
 
       <div class="route-meta">
         <span id="routeSource"></span>
-        <span id="savedStatus">Saved for offline use</span>
+        <span id="savedStatus" aria-live="polite">Saved for offline use</span>
 
         <button id="refreshFlight" type="button">
           ↻ Refresh live details
@@ -766,7 +766,7 @@
   </script>
   <script>
 const STORAGE_KEY = "airtrace.preparedJourney.v2";
-const APP_VERSION = "31";
+const APP_VERSION = "32";
 const DIAGNOSTIC_LOG_KEY = "airtrace.diagnostics.v1";
 const DIAGNOSTIC_INSTALL_KEY = "airtrace.installationId.v1";
 const DIAGNOSTIC_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
@@ -960,6 +960,7 @@ let planeMarker = null;
 let mapReady = false;
 let sensorWatchId = null;
 let lastRefreshAt = 0;
+let refreshInFlight = false;
 let nearbyPlaceCache = null;
 const sensorState = {
   enabled: false,
@@ -1036,7 +1037,34 @@ function setNetworkState() {
 }
 
 function cleanFlightNumber(value) {
-  return value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  return String(value || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
+function departureDateForRefresh() {
+  const savedDate = String(journey?.lookup?.date || "");
+  if (/^\d{4}-\d{2}-\d{2}$/.test(savedDate)) return savedDate;
+  const source = journey?.flight?.scheduledDepartureUtc || journey?.flight?.departureUtc;
+  const timestamp = flightTimestamp(source);
+  if (!Number.isFinite(timestamp)) return null;
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: journey?.flight?.origin?.timeZone || "UTC",
+      year: "numeric", month: "2-digit", day: "2-digit"
+    }).formatToParts(new Date(timestamp));
+    const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+    return `${values.year}-${values.month}-${values.day}`;
+  } catch (_) {
+    return new Date(timestamp).toISOString().slice(0, 10);
+  }
+}
+
+function refreshLookupDetails() {
+  if (!journey?.flight) return null;
+  const flight = cleanFlightNumber(
+    journey.lookup?.flight || journey.lookup?.entered || journey.flight.ident || journey.flight.callSign
+  );
+  const date = departureDateForRefresh();
+  return flight && date ? { flight, date } : null;
 }
 
 function clamp(value, min = 0, max = 1) {
@@ -2188,7 +2216,7 @@ function renderTracker() {
     $("phaseDetail").textContent = `${formatDuration(now - departure)} elapsed`;
   }
 
-  $("refreshFlight").disabled = !navigator.onLine || !journey.lookup;
+  $("refreshFlight").disabled = !navigator.onLine || !refreshLookupDetails() || refreshInFlight;
 }
 
 function openJourney(data) {
@@ -2246,15 +2274,40 @@ function openJourney(data) {
 
 async function refreshFlightData(options = {}) {
   const apiBase = (config.API_BASE_URL || "").replace(/\/$/, "");
-  if (!journey?.lookup || !navigator.onLine || !apiBase) return;
   const button = $("refreshFlight");
+  const status = $("savedStatus");
+  const interactive = !options.silent;
+  if (!journey) return;
+  if (refreshInFlight) {
+    if (interactive) status.textContent = "A live refresh is already in progress…";
+    return;
+  }
+  if (!navigator.onLine) {
+    if (interactive) status.textContent = "Offline — reconnect before refreshing live details.";
+    return;
+  }
+  if (!apiBase) {
+    if (interactive) status.textContent = "Live refresh service is not configured.";
+    return;
+  }
+  const lookup = refreshLookupDetails();
+  if (!lookup) {
+    if (interactive) status.textContent = "This saved journey does not contain enough flight information to refresh.";
+    return;
+  }
+  refreshInFlight = true;
   const oldText = button.textContent;
   button.disabled = true;
-  button.textContent = "Refreshing…";
+  if (interactive) {
+    button.textContent = "Refreshing…";
+    status.textContent = "Checking the flight provider for updated details…";
+  }
   logDiagnostic("flight_refresh_started", { silent: Boolean(options.silent) });
   try {
-    const { flight, date } = journey.lookup;
-    const response = await fetch(`${apiBase}/prepare?flight=${encodeURIComponent(flight)}&date=${encodeURIComponent(date)}`);
+    const { flight, date } = lookup;
+    const response = await fetch(`${apiBase}/prepare?flight=${encodeURIComponent(flight)}&date=${encodeURIComponent(date)}&refresh=${Date.now()}`, {
+      cache: "no-store"
+    });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(body.error || `Flight service returned ${response.status}`);
     const tracking = journey.tracking || {};
@@ -2263,14 +2316,18 @@ async function refreshFlightData(options = {}) {
     lastRefreshAt = Date.now();
     logDiagnostic("flight_refresh_succeeded", { providerSchema: body.schemaVersion || null });
     openJourney(body);
+    status.textContent = `${options.silent ? "Live details updated automatically" : "Live details updated"} at ${new Intl.DateTimeFormat(undefined, {
+      hour: "2-digit", minute: "2-digit", second: "2-digit"
+    }).format(new Date())}`;
   } catch (error) {
     logDiagnostic("flight_refresh_failed", { message: safeDiagnosticText(error.message) });
     if (!options.silent) {
-      $("savedStatus").textContent = error.message || "Live details could not be refreshed.";
+      status.textContent = `Refresh failed: ${error.message || "Live details could not be refreshed."}`;
     }
   } finally {
-    button.textContent = oldText;
-    button.disabled = !navigator.onLine || !journey?.lookup;
+    refreshInFlight = false;
+    if (interactive) button.textContent = oldText;
+    button.disabled = !navigator.onLine || !refreshLookupDetails();
   }
 }
 
@@ -2413,7 +2470,7 @@ setNetworkState();
 logDiagnostic("app_started", { version: APP_VERSION, online: navigator.onLine });
 updateDiagnosticsStatus();
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("./sw.js?v=31").then(registration => {
+  navigator.serviceWorker.register("./sw.js?v=32").then(registration => {
     logDiagnostic("service_worker_registered", { controlled: Boolean(navigator.serviceWorker.controller) });
     registration.update().catch(error => logDiagnostic("service_worker_update_failed", { message: safeDiagnosticText(error.message) }));
   }).catch(error => logDiagnostic("service_worker_registration_failed", { message: safeDiagnosticText(error.message) }));
