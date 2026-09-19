@@ -766,7 +766,7 @@
   </script>
   <script>
 const STORAGE_KEY = "airtrace.preparedJourney.v2";
-const APP_VERSION = "28";
+const APP_VERSION = "29";
 const DIAGNOSTIC_LOG_KEY = "airtrace.diagnostics.v1";
 const DIAGNOSTIC_INSTALL_KEY = "airtrace.installationId.v1";
 const DIAGNOSTIC_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
@@ -991,12 +991,13 @@ const WATER_REGIONS = [
 const PLACE_REGION_NAMES = {
   agra:"Uttar Pradesh", ahmedabad:"Gujarat", ajmer:"Rajasthan", amritsar:"Punjab", ayodhya:"Uttar Pradesh",
   ballari:"Karnataka", bellary:"Karnataka", bengaluru:"Karnataka", bangalore:"Karnataka", belagavi:"Karnataka", belgaum:"Karnataka",
+  chamarajanagar:"Karnataka", chikmagalur:"Karnataka", chikkamagaluru:"Karnataka", davanagere:"Karnataka", gadag:"Karnataka",
   bhopal:"Madhya Pradesh", bhubaneswar:"Odisha", chandigarh:"Chandigarh", chennai:"Tamil Nadu", coimbatore:"Tamil Nadu",
   dehradun:"Uttarakhand", delhi:"Delhi", dharwad:"Karnataka", goa:"Goa", gorakhpur:"Uttar Pradesh", guwahati:"Assam",
-  hubballi:"Karnataka", hubli:"Karnataka", hyderabad:"Telangana", imphal:"Manipur", indore:"Madhya Pradesh",
+  hassan:"Karnataka", hospet:"Karnataka", hosapete:"Karnataka", hunsur:"Karnataka", hubballi:"Karnataka", hubli:"Karnataka", hyderabad:"Telangana", imphal:"Manipur", indore:"Madhya Pradesh",
   jaipur:"Rajasthan", jaisalmer:"Rajasthan", jammu:"Jammu and Kashmir", jamnagar:"Gujarat", jodhpur:"Rajasthan",
   kannur:"Kerala", kanpur:"Uttar Pradesh", kochi:"Kerala", cochin:"Kerala", kolhapur:"Maharashtra", kolkata:"West Bengal",
-  kozhikode:"Kerala", lucknow:"Uttar Pradesh", ludhiana:"Punjab", madurai:"Tamil Nadu", mangaluru:"Karnataka", mangalore:"Karnataka",
+  kozhikode:"Kerala", lucknow:"Uttar Pradesh", ludhiana:"Punjab", madikeri:"Karnataka", madurai:"Tamil Nadu", mandya:"Karnataka", mangaluru:"Karnataka", mangalore:"Karnataka",
   mumbai:"Maharashtra", mysuru:"Karnataka", mysore:"Karnataka", nagpur:"Maharashtra", nashik:"Maharashtra", newdelhi:"Delhi",
   panaji:"Goa", patna:"Bihar", prayagraj:"Uttar Pradesh", pune:"Maharashtra", raipur:"Chhattisgarh", rajkot:"Gujarat",
   ranchi:"Jharkhand", shillong:"Meghalaya", shimla:"Himachal Pradesh", srinagar:"Jammu and Kashmir", surat:"Gujarat",
@@ -1512,15 +1513,15 @@ function estimatedAltitude(progress, now = Date.now()) {
   const climbFactor = Math.min(clamp(elapsedMinutes / climbMinutes), clamp(progress / .15));
   const descentFactor = Math.min(clamp(remainingMinutes / descentMinutes), clamp((1 - progress) / .25));
   const rawFeet = cruise * Math.min(climbFactor, descentFactor);
-  const feet = rawFeet <= 1000 && descentFactor < 1
-    ? Math.round(rawFeet / 5) * 5
+  const feet = rawFeet <= 10000 && descentFactor < 1
+    ? Math.floor(rawFeet)
     : Math.round(rawFeet / 500) * 500;
   const phase = climbFactor < 1 ? "Estimated climb" : descentFactor < 1 ? "Estimated descent" : "Estimated cruise";
   return {
     feet: Math.max(0, feet),
     phase,
     confidence: "estimated",
-    finalCountdown: rawFeet > 0 && rawFeet <= 1000 && descentFactor < 1
+    finalCountdown: rawFeet > 0 && rawFeet <= 10000 && descentFactor < 1
   };
 }
 
@@ -1841,7 +1842,7 @@ function updateFinalAltitudeCountdown() {
   const reading = estimatedAltitude(effectiveProgress(), Date.now());
   if (!reading.finalCountdown) return;
   $("altitude").textContent = `↓ ${Math.max(0, reading.feet).toLocaleString()} ft`;
-  $("altitudeDetail").textContent = "Final 1,000 ft countdown · estimated, not live aircraft data";
+  $("altitudeDetail").textContent = "Final 10,000 ft countdown · exact whole-foot display · estimated, not live aircraft data";
   updateSpeed(effectiveProgress(), reading, null);
 }
 
@@ -2061,7 +2062,7 @@ function renderTracker() {
     const low = Math.max(0, fallbackAltitude.feet - range);
     const high = fallbackAltitude.feet + range;
     $("altitudeDetail").textContent = fallbackAltitude.finalCountdown
-      ? "Final 1,000 ft countdown · estimated, not live aircraft data"
+      ? "Final 10,000 ft countdown · exact whole-foot display · estimated, not live aircraft data"
       : `${fallbackAltitude.phase} · likely ${low.toLocaleString()}–${high.toLocaleString()} ft · not live aircraft data`;
   }
   const displayedAltitude = phoneAltitude || (providerAltitude !== null ? { feet: providerAltitude } : fallbackAltitude);
@@ -2148,7 +2149,7 @@ function openJourney(data) {
     if (previewProgress === null) renderTracker();
   }, 1000);
   clearInterval(altitudeTimer);
-  altitudeTimer = setInterval(updateFinalAltitudeCountdown, 100);
+  altitudeTimer = setInterval(updateFinalAltitudeCountdown, 50);
   clearInterval(refreshTimer);
   refreshTimer = setInterval(() => {
     const tracking = journey?.tracking || {};
@@ -2329,7 +2330,7 @@ setNetworkState();
 logDiagnostic("app_started", { version: APP_VERSION, online: navigator.onLine });
 updateDiagnosticsStatus();
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("./sw.js?v=28").then(registration => {
+  navigator.serviceWorker.register("./sw.js?v=29").then(registration => {
     logDiagnostic("service_worker_registered", { controlled: Boolean(navigator.serviceWorker.controller) });
     registration.update().catch(error => logDiagnostic("service_worker_update_failed", { message: safeDiagnosticText(error.message) }));
   }).catch(error => logDiagnostic("service_worker_registration_failed", { message: safeDiagnosticText(error.message) }));

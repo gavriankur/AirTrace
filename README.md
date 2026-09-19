@@ -4,6 +4,12 @@ Airtrace prepares a flight while the user is online, then estimates the aircraft
 
 This is an **estimated journey**, not live aircraft tracking.
 
+## v29 final descent and state restoration
+
+V29 starts the rapid estimated-altitude countdown at 10,000 feet and displays whole-foot values continuously down to zero instead of rounding the final descent to broad altitude steps. The value remains explicitly labelled as an estimate unless phone GPS or provider altitude is available.
+
+The lower **Currently flying over** line again appends a state when it can identify one. Its offline fallback now covers additional Karnataka places, including Hunsur, so the example shown by testers becomes **Flying over Hunsur, Karnataka**. State names remain excluded from the large origin-to-destination heading.
+
 ## v28 state name placement
 
 V28 keeps the large route heading concise with city names only, for example `Mumbai → Bengaluru`. State or region names remain limited to the lower **Currently flying over** line, such as **Flying over Ballari, Karnataka**.
