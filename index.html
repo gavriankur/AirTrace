@@ -766,7 +766,7 @@
   </script>
   <script>
 const STORAGE_KEY = "airtrace.preparedJourney.v2";
-const APP_VERSION = "29";
+const APP_VERSION = "30";
 const DIAGNOSTIC_LOG_KEY = "airtrace.diagnostics.v1";
 const DIAGNOSTIC_INSTALL_KEY = "airtrace.installationId.v1";
 const DIAGNOSTIC_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
@@ -1843,7 +1843,15 @@ function updateFinalAltitudeCountdown() {
     finalAltitudeCount = null;
     return;
   }
-  const reading = estimatedAltitude(effectiveProgress(), Date.now());
+  const progress = effectiveProgress();
+  if (progress >= 1 || Date.now() >= airborneWindow().landing) {
+    finalAltitudeCount = 0;
+    $("altitude").textContent = "0 ft";
+    $("altitudeDetail").textContent = "Estimated touchdown time reached";
+    updateSpeed(1, { feet: 0 }, null);
+    return;
+  }
+  const reading = estimatedAltitude(progress, Date.now());
   if (!reading.finalCountdown) {
     finalAltitudeCount = null;
     return;
@@ -1851,11 +1859,11 @@ function updateFinalAltitudeCountdown() {
   if (finalAltitudeCount === null) {
     finalAltitudeCount = reading.feet >= 9950 ? 10000 : Math.max(0, reading.feet);
   } else {
-    finalAltitudeCount = Math.max(0, finalAltitudeCount - 1);
+    finalAltitudeCount = Math.max(0, Math.min(finalAltitudeCount - 1, reading.feet));
   }
   $("altitude").textContent = `↓ ${finalAltitudeCount.toLocaleString()} ft`;
   $("altitudeDetail").textContent = "Final 10,000 ft countdown · exact whole-foot display · estimated, not live aircraft data";
-  updateSpeed(effectiveProgress(), { ...reading, feet: finalAltitudeCount }, null);
+  updateSpeed(progress, { ...reading, feet: finalAltitudeCount }, null);
 }
 
 function updatePlaneMarker(progress) {
@@ -2030,9 +2038,10 @@ function renderTracker() {
   const providerLanding = providerConfirmedLanding();
 
   updatePlaneMarker(progress);
-  $("progressText").textContent = `${Math.round(progress * 100)}%`;
+  const displayedProgress = progress >= 1 ? 100 : Math.min(99, Math.floor(progress * 100));
+  $("progressText").textContent = `${displayedProgress}%`;
   $("progressBar").style.width = `${progress * 100}%`;
-  $("previewSlider").value = Math.round(progress * 100);
+  $("previewSlider").value = displayedProgress;
   $("previewSlider").style.setProperty("--slider-progress", `${progress * 100}%`);
   const displayedPosition = phonePosition ? sensorState.fix : liveProvider || point;
   const positionSource = phonePosition ? "phone" : liveProvider ? "provider" : "simulation";
@@ -2052,7 +2061,14 @@ function renderTracker() {
   $("altitudeLabel").textContent = phoneAltitude !== null
     ? "PHONE-REPORTED ALTITUDE"
     : providerAltitude !== null ? "PROVIDER LIVE ALTITUDE" : "ESTIMATED ALTITUDE";
-  if (phoneAltitude !== null) {
+  if (progress >= 1) {
+    finalAltitudeCount = 0;
+    $("altitudeLabel").textContent = "ESTIMATED ALTITUDE";
+    $("altitude").textContent = "0 ft";
+    $("altitudeDetail").textContent = previewProgress !== null
+      ? "Preview reached the destination"
+      : "Estimated touchdown time reached";
+  } else if (phoneAltitude !== null) {
     finalAltitudeCount = null;
     $("altitude").textContent = `${Math.max(0, phoneAltitude.feet).toLocaleString()} ft`;
     $("altitudeDetail").textContent = phoneAltitude.accuracyFeet === null
@@ -2073,6 +2089,8 @@ function renderTracker() {
   } else {
     if (fallbackAltitude.finalCountdown && finalAltitudeCount === null) {
       finalAltitudeCount = fallbackAltitude.feet >= 9950 ? 10000 : Math.max(0, fallbackAltitude.feet);
+    } else if (fallbackAltitude.finalCountdown) {
+      finalAltitudeCount = Math.min(finalAltitudeCount, fallbackAltitude.feet);
     } else if (!fallbackAltitude.finalCountdown) {
       finalAltitudeCount = null;
     }
@@ -2086,7 +2104,9 @@ function renderTracker() {
       ? "Final 10,000 ft countdown · exact whole-foot display · estimated, not live aircraft data"
       : `${fallbackAltitude.phase} · likely ${low.toLocaleString()}–${high.toLocaleString()} ft · not live aircraft data`;
   }
-  const displayedAltitude = phoneAltitude || (providerAltitude !== null ? { feet: providerAltitude } : fallbackAltitude);
+  const displayedAltitude = progress >= 1
+    ? { feet: 0 }
+    : phoneAltitude || (providerAltitude !== null ? { feet: providerAltitude } : fallbackAltitude);
   updateSpeed(progress, displayedAltitude, liveProvider);
   updateTimelineTimes(progress);
   updateFlyingOver(point, progress);
@@ -2351,7 +2371,7 @@ setNetworkState();
 logDiagnostic("app_started", { version: APP_VERSION, online: navigator.onLine });
 updateDiagnosticsStatus();
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("./sw.js?v=29").then(registration => {
+  navigator.serviceWorker.register("./sw.js?v=30").then(registration => {
     logDiagnostic("service_worker_registered", { controlled: Boolean(navigator.serviceWorker.controller) });
     registration.update().catch(error => logDiagnostic("service_worker_update_failed", { message: safeDiagnosticText(error.message) }));
   }).catch(error => logDiagnostic("service_worker_registration_failed", { message: safeDiagnosticText(error.message) }));

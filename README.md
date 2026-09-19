@@ -4,6 +4,10 @@ Airtrace prepares a flight while the user is online, then estimates the aircraft
 
 This is an **estimated journey**, not live aircraft tracking.
 
+## v30 touchdown consistency
+
+V30 keeps the final altitude animation synchronized with the calculated descent, including when Safari slows background timers. A journey below 100% can display no more than 99%; once it genuinely reaches 100%, the estimated altitude is forced to 0 feet and the touchdown message is shown. Moving the preview slider to 100% follows the same rule.
+
 ## v29 final descent and state restoration
 
 V29 starts the rapid estimated-altitude countdown at 10,000 feet and displays whole-foot values continuously down to zero instead of rounding the final descent to broad altitude steps. The value remains explicitly labelled as an estimate unless phone GPS or provider altitude is available.
