@@ -471,8 +471,7 @@
 
             <input
               id="flightNumber"
-              value="AI175"
-              placeholder="6E5184 or IGO376E"
+              placeholder="e.g. AI175 or IGO376E"
               autocomplete="off"
               required
             >
@@ -766,7 +765,7 @@
   </script>
   <script>
 const STORAGE_KEY = "airtrace.preparedJourney.v2";
-const APP_VERSION = "32";
+const APP_VERSION = "33";
 const DIAGNOSTIC_LOG_KEY = "airtrace.diagnostics.v1";
 const DIAGNOSTIC_INSTALL_KEY = "airtrace.installationId.v1";
 const DIAGNOSTIC_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
@@ -2470,7 +2469,7 @@ setNetworkState();
 logDiagnostic("app_started", { version: APP_VERSION, online: navigator.onLine });
 updateDiagnosticsStatus();
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("./sw.js?v=32").then(registration => {
+  navigator.serviceWorker.register("./sw.js?v=33").then(registration => {
     logDiagnostic("service_worker_registered", { controlled: Boolean(navigator.serviceWorker.controller) });
     registration.update().catch(error => logDiagnostic("service_worker_update_failed", { message: safeDiagnosticText(error.message) }));
   }).catch(error => logDiagnostic("service_worker_registration_failed", { message: safeDiagnosticText(error.message) }));

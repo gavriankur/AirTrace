@@ -4,6 +4,10 @@ Airtrace prepares a flight while the user is online, then estimates the aircraft
 
 This is an **estimated journey**, not live aircraft tracking.
 
+## v33 empty flight input
+
+The flight field starts empty. It shows `e.g. AI175 or IGO376E` as placeholder text, so tapping the field lets you type immediately without deleting a prefilled flight number.
+
 ## v32 reliable online refresh
 
 V32 makes **Refresh live details** provide visible progress, success and failure messages, including a successful refresh timestamp with seconds. It can reconstruct the flight number and departure date for journeys saved by older AirTrace versions that do not contain a `lookup` object. Requests explicitly bypass browser caches, duplicate refreshes are blocked, and offline or incomplete-journey failures are explained instead of silently doing nothing.
